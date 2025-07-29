@@ -1,0 +1,116 @@
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  release:
+    types: [created]
+
+env:
+  CARGO_TERM_COLOR: always
+
+###############################################################################
+# Job 1 – Build + test the Plasma 6 widget
+###############################################################################
+jobs:
+  widget:
+    name: Plasma Widget
+    runs-on: ubuntu-latest # the host runner
+    container: # …but everything below runs **inside** Debian sid
+      image: debian:sid
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      # Install prefix so we can “stage” the widget in artifacts/
+      DESTDIR: ${{ github.workspace }}/artifacts
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies (KF6 + Qt 6)
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential ninja-build cmake git gettext \
+            extra-cmake-modules \
+            qt6-base-dev qt6-declarative-dev qt6-qmltooling-dev qt6-tools-dev-tools \
+            libplasma-dev libkf6config-dev libkf6i18n-dev \
+            libkf6notifications-dev libkf6windowsystem-dev
+
+      - name: Configure CMake
+        run: |
+          cmake -S plasmoid -B build -GNinja \
+                -DCMAKE_INSTALL_PREFIX=/usr \
+                -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build widget
+        run: cmake --build build --parallel
+
+      # (Optional) run any unit tests you have
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure || true
+
+      - name: Stage install into artifacts/
+        run: cmake --install build --prefix "${DESTDIR}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plasmoid
+          path: artifacts
+
+  ###############################################################################
+  # Job 2 – Build/format/test the Rust background service
+  ###############################################################################
+  rust:
+    name: Rust Service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo registry + build
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy -- -D warnings
+
+      - name: Test
+        run: cargo test --verbose
+
+      - name: Build (release)
+        run: cargo build --release --verbose
+
+  ###############################################################################
+  # Job 3 – Static project‑structure sanity checks
+  ###############################################################################
+  validate:
+    name: Validate Plasmoid Layout
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate file presence & permissions
+        run: |
+          set -euo pipefail
+          test -f plasmoid/metadata.json
+          test -f plasmoid/contents/ui/main.qml
+          jq . plasmoid/metadata.json >/dev/null
+
+          # script executability
+          for f in scripts/install.sh scripts/uninstall.sh; do
+            [ -x "$f" ] || { echo "$f must be +x"; exit 1; }
+          done

@@ -1,0 +1,40 @@
+[package]
+name = "kde-airpods-service"
+version = "0.1.0"
+edition = "2024"
+
+authors = ["Can Boluk <me@can.ac>"]
+description = "D-Bus service for AirPods management in KDE Plasma"
+license = "GPL-3.0-or-later"
+
+homepage = "https://github.com/can1357/kde-airpods"
+repository = "https://github.com/can1357/kde-airpods"
+documentation = "https://github.com/can1357/kde-airpods"
+readme = "../README.md"
+
+keywords = ["kde", "plasma", "airpods", "bluetooth", "dbus"]
+categories = ["hardware-support", "desktop", "os::linux-apis"]
+
+[dependencies]
+tokio = { version = "1.35", features = ["full"] }
+zbus = { version = "5.9", features = ["tokio"] }
+bluer = { version = "0.17", features = ["l2cap", "bluetoothd"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "2"
+log = "0.4"
+env_logger = "0.11"
+hex = "0.4"
+futures = "0.3"
+async-trait = "0.1"
+toml = "0.9"
+crossbeam = { version = "0.8", features = ["std"] }
+parking_lot = "0.12"
+heapless = "0.8"
+bytes = "1.10"
+smallvec = "1.10"
+
+[[bin]]
+name = "kde-airpods-service"
+path = "src/main.rs"

@@ -1,0 +1,55 @@
+# Rust
+/service/target/
+/service/Cargo.lock
+**/*.rs.bk
+*.pdb
+**/*.d
+**/*.rlib
+**/*.rmeta
+
+# Qt/QML
+*.qmlc
+*.jsc
+*.qmltypes
+*.qmlcache
+*.moc
+.qmake.cache
+.qmake.stash
+
+# KDE
+.directory
+*.kate-swp
+.kdev4/
+*.kdev4
+
+# Build artifacts
+/build/
+/dist/
+*.o
+*.so
+*.a
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# System
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+re.sh
+
+# User-specific
+/scripts/local/
+/.env
+node_modules/

@@ -1,0 +1,19 @@
+[Unit]
+Description=KDE AirPods D-Bus Service
+After=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=org.kde.plasma.airpods
+ExecStart=/usr/bin/kde-airpods-service
+Restart=on-failure
+RestartSec=5
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+NoNewPrivileges=yes
+ReadWritePaths=/var/run/dbus
+SupplementaryGroups=bluetooth
+
+[Install]
+WantedBy=default.target

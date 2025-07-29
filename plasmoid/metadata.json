@@ -1,0 +1,34 @@
+{
+	"KPackageStructure": "Plasma/Applet",
+	"KPlugin": {
+		"Id": "org.kde.plasma.airpods",
+		"Name": "KDE AirPods",
+		"Description": "AirPods management for KDE Plasma",
+		"Icon": "audio-headphones",
+		"Category": "System Information",
+		"Version": "0.1.0",
+		"License": "GPL-3.0-or-later",
+		"EnabledByDefault": true,
+		"Authors": [
+			{
+				"Name": "Can Boluk",
+				"Email": "me@can.ac",
+				"Role": "Developer"
+			}
+		],
+		"Website": "https://github.com/can1357/kde-airpods",
+		"Support": "https://github.com/can1357/kde-airpods/issues",
+		"Source": "https://github.com/can1357/kde-airpods",
+		"Contributors": [],
+		"Dependencies": [],
+		"Translations": false
+	},
+	"X-Plasma-API-Minimum-Version": "6.0",
+	"X-Plasma-MainScript": "ui/main.qml",
+	"X-KDE-PluginInfo-Name": "org.kde.plasma.airpods",
+	"X-KDE-PluginInfo-Version": "0.1.0",
+	"X-KDE-PluginInfo-License": "GPL-3.0-or-later",
+	"X-KDE-PluginInfo-Author": "Can Boluk",
+	"X-KDE-PluginInfo-Email": "me@can.ac",
+	"X-KDE-PluginInfo-EnabledByDefault": true
+}

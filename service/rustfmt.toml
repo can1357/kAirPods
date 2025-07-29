@@ -1,0 +1,15 @@
+edition = "2024"
+tab_spaces = 3
+imports_granularity = "Crate"
+group_imports = "StdExternalCrate"
+reorder_imports = true
+wrap_comments = true
+format_code_in_doc_comments = true
+max_width = 100
+comment_width = 80
+use_field_init_shorthand = true
+indent_style = "Block"
+match_block_trailing_comma = true
+chain_width = 60
+overflow_delimited_expr = true
+normalize_doc_attributes = true
