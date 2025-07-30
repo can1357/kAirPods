@@ -128,14 +128,18 @@ impl BluetoothManager {
       rx.await.map_err(|_| AirPodsError::ManagerShutdown)?
    }
 
-   pub async fn get_device(&self, address: Address) -> Option<AirPods> {
+   pub async fn get_device(&self, address: Address) -> Result<AirPods> {
       let (tx, rx) = oneshot::channel();
       self
          .inbox
          .send(ManagerCommand::GetDeviceState(address, tx))
          .await
-         .ok()?;
-      rx.await.ok()?
+         .map_err(|_| AirPodsError::DeviceNotFound(address))?;
+
+      rx.await
+         .ok()
+         .flatten()
+         .ok_or(AirPodsError::DeviceNotFound(address))
    }
 
    pub async fn all_devices(&self) -> Vec<AirPods> {
@@ -442,7 +446,7 @@ impl ManagerActor {
       let loopback = self.loopback_tx.clone();
       let session = self.session.clone();
       tokio::spawn(async move {
-         tokio::time::sleep(ADAPTER_RECOVERY_DELAY).await;
+         time::sleep(ADAPTER_RECOVERY_DELAY).await;
 
          match session.adapter(&name) {
             Ok(adapter) => {
@@ -540,7 +544,7 @@ impl ManagerActor {
             let delay = Duration::from_secs(2u64.pow(device.retry_count)); // Exponential backoff
 
             tokio::spawn(async move {
-               tokio::time::sleep(delay).await;
+               time::sleep(delay).await;
                let _ = loopback
                   .send(ManagerCommand::ConnectDevice(addr, None))
                   .await;

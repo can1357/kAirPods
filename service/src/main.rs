@@ -6,8 +6,9 @@
 
 use std::{sync::Arc, time::Duration};
 
+use crossbeam::queue::SegQueue;
 use log::{info, warn};
-use tokio::signal;
+use tokio::{signal, sync::Notify, time};
 use zbus::{Connection, connection, object_server::InterfaceRef};
 
 mod airpods;
@@ -65,15 +66,15 @@ async fn main() -> Result<()> {
 }
 
 struct EventProcessor {
-   queue: crossbeam::queue::SegQueue<(AirPods, AirPodsEvent)>,
-   notifier: tokio::sync::Notify,
+   queue: SegQueue<(AirPods, AirPodsEvent)>,
+   notifier: Notify,
 }
 
 impl EventProcessor {
    fn new() -> Arc<Self> {
       Arc::new(Self {
-         queue: crossbeam::queue::SegQueue::new(),
-         notifier: tokio::sync::Notify::new(),
+         queue: SegQueue::new(),
+         notifier: Notify::new(),
       })
    }
 }
@@ -91,7 +92,7 @@ impl EventProcessor {
          if Arc::strong_count(self) == 1 {
             return None;
          }
-         let _ = tokio::time::timeout(Duration::from_secs(1), notify).await;
+         let _ = time::timeout(Duration::from_secs(1), notify).await;
       }
    }
 

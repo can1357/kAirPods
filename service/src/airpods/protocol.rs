@@ -190,7 +190,7 @@ impl FeatureId {
          name
       } else {
          let bytes = &U8_TO_HEX[self.0 as usize];
-         unsafe { std::str::from_utf8_unchecked(bytes) }
+         str::from_utf8(bytes).unwrap_or("??")
       }
    }
 }
@@ -275,7 +275,7 @@ impl EarDetectionStatus {
       if right_in_ear {
          flags |= Self::RIGHT;
       }
-      Self(unsafe { NonZeroU8::new_unchecked(flags) })
+      Self(NonZeroU8::new(flags).expect("(x|valid) != 0"))
    }
 
    pub const fn is_left_in_ear(&self) -> bool {

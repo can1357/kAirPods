@@ -57,7 +57,7 @@ impl Drop for ConnectionState {
 }
 
 /// Internal shared state for an AirPods device.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct AirPodsInner {
    address: Address,
    address_str: Arc<str>,
@@ -135,18 +135,15 @@ impl<T: PartialEq + Clone> UpdateOp<T> {
 impl AirPods {
    /// Creates a new AirPods device instance.
    pub fn new(address: Address, name: String) -> Self {
-      Self(Arc::new(AirPodsInner {
-         address,
-         address_str: address.to_string().into(),
-         name: parking_lot::Mutex::new(name.into()),
-         is_connected: AtomicBool::new(false),
-         battery: AtomicCell::default(),
-         ear_detection: AtomicCell::default(),
-         noise_mode: AtomicCell::default(),
-         features: std::array::from_fn(|_| AtomicU64::new(0)),
-         features_seen: std::array::from_fn(|_| AtomicU64::new(0)),
-         conn: RwLock::new(None),
-      }))
+      Self(
+         AirPodsInner {
+            address,
+            address_str: address.to_string().into(),
+            name: parking_lot::Mutex::new(name.into()),
+            ..Default::default()
+         }
+         .into(),
+      )
    }
 
    /// Gets the address of the Airpod.
@@ -165,12 +162,12 @@ impl AirPods {
    }
 
    /// Updates the name of the Airpod.
-   pub fn update_name(&self, name: &str) -> UpdateOp<Arc<str>> {
+   pub fn update_name(&self, name: Arc<str>) -> UpdateOp<Arc<str>> {
       let mut lock = self.0.name.lock();
-      if lock.as_ref() == name {
+      if lock.as_ref() == name.as_ref() {
          return UpdateOp::Noop;
       }
-      UpdateOp::Updated(mem::replace(&mut *lock, name.into()))
+      UpdateOp::Updated(mem::replace(&mut *lock, name))
    }
 
    /// Gets the battery information of the Airpod.
@@ -424,7 +421,7 @@ impl AirPods {
             match rx.recv().await {
                Ok(packet) => {
                   if let Some(this) = weak.upgrade() {
-                     this.process_packet(addr, &packet, &event_tx).await;
+                     this.process_packet(addr, packet, &event_tx).await;
                   } else {
                      warn!("{addr}: Airpod instance was dropped");
                      break;
@@ -489,10 +486,10 @@ impl AirPods {
       }
    }
 
-   async fn process_packet(&self, address: Address, packet: &[u8], event_tx: &EventSender) {
+   async fn process_packet(&self, address: Address, packet: Bytes, event_tx: &EventSender) {
       // Battery status
       if packet.starts_with(HDR_BATTERY_STATE) {
-         match parser::parse_battery_status(packet) {
+         match parser::parse_battery_status(&packet) {
             Ok(battery) => {
                debug!(
                   "Battery updated for {}: L:{}% R:{}% C:{}%",
@@ -509,7 +506,7 @@ impl AirPods {
       }
       // Noise control mode
       else if packet.starts_with(HDR_NOISE_CTL) {
-         match parser::parse_noise_mode(packet) {
+         match parser::parse_noise_mode(&packet) {
             Ok(mode) => {
                debug!("Noise mode updated for {address}: {mode}");
                if self.update_noise_mode(mode).is_updated() {
@@ -521,7 +518,7 @@ impl AirPods {
       }
       // Ear detection
       else if packet.starts_with(HDR_EAR_DETECTION) {
-         match parser::parse_ear_detection(packet) {
+         match parser::parse_ear_detection(&packet) {
             Ok(status) => {
                debug!(
                   "Ear detection updated for {}: L:{} R:{}",
@@ -539,13 +536,13 @@ impl AirPods {
       }
       // Metadata packets
       else if packet.starts_with(HDR_METADATA) {
-         if let Ok(metadata) = parser::parse_metadata(packet) {
+         if let Ok(metadata) = parser::parse_metadata(&packet) {
             debug!("Device metadata for {address}: {metadata:?}");
 
-            if let Some(new_name) = metadata.get("possible_name").and_then(|v| v.as_str())
-               && self.update_name(new_name).is_updated()
+            if let Some(new_name) = metadata.name_candidate
+               && self.update_name(new_name.clone()).is_updated()
             {
-               event_tx.emit(self, AirPodsEvent::DeviceNameChanged(new_name.into()));
+               event_tx.emit(self, AirPodsEvent::DeviceNameChanged(new_name));
             }
          }
       }
@@ -554,14 +551,14 @@ impl AirPods {
          debug!("Received handshake ACK from {address}");
       } else if packet.starts_with(HDR_ACK_FEATURES) {
          debug!("Received features ACK from {address}");
-      } else if let Some((cmd, op)) = FeatureOp::parse(packet) {
+      } else if let Some((cmd, op)) = FeatureOp::parse(&packet) {
          debug!("Received feature command from {address}: {cmd} {op:?}");
          if matches!(op, FeatureOp::Enable | FeatureOp::Disable) {
             self.set_feature_enabled(cmd, matches!(op, FeatureOp::Enable));
          }
       } else {
          let data = if packet.len() < 16 {
-            hex::encode(packet)
+            hex::encode(&packet)
          } else {
             format!(
                "{}..{}",

@@ -3,7 +3,7 @@
 //! This module handles loading and saving configuration from disk,
 //! including known devices and connection parameters.
 
-use std::{fs, path::PathBuf};
+use std::{env, fs, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -95,11 +95,11 @@ impl Config {
    }
 
    fn config_path() -> Result<PathBuf> {
-      let config_dir = if let Ok(airpods_home) = std::env::var("AIRPODS_HOME") {
+      let config_dir = if let Ok(airpods_home) = env::var("AIRPODS_HOME") {
          PathBuf::from(airpods_home)
-      } else if let Ok(config_home) = std::env::var("XDG_CONFIG_HOME") {
+      } else if let Ok(config_home) = env::var("XDG_CONFIG_HOME") {
          PathBuf::from(config_home)
-      } else if let Ok(home) = std::env::var("HOME") {
+      } else if let Ok(home) = env::var("HOME") {
          PathBuf::from(home).join(".config")
       } else {
          return Err(AirPodsError::ConfigDirNotFound);

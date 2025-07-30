@@ -70,4 +70,10 @@ pub enum AirPodsError {
 }
 
 /// Convenience type alias for Results with `AirPodsError`.
-pub type Result<T> = std::result::Result<T, AirPodsError>;
+pub type Result<T, E = AirPodsError> = std::result::Result<T, E>;
+
+impl From<AirPodsError> for zbus::fdo::Error {
+   fn from(error: AirPodsError) -> Self {
+      zbus::fdo::Error::Failed(error.to_string())
+   }
+}

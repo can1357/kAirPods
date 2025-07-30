@@ -3,7 +3,7 @@
 //! This module contains functions to parse various packet types received
 //! from AirPods devices over the L2CAP connection.
 
-use std::collections::HashMap;
+use std::{str, sync::Arc};
 
 use log::{debug, warn};
 
@@ -178,44 +178,33 @@ pub fn parse_ear_detection(data: &[u8]) -> Result<EarDetectionStatus> {
    Ok(EarDetectionStatus::new(!left_out, !right_out))
 }
 
-pub fn parse_metadata(data: &[u8]) -> Result<HashMap<String, serde_json::Value>> {
+#[derive(Debug, Default)]
+pub struct Metadata {
+   pub name_candidate: Option<Arc<str>>,
+}
+
+pub fn parse_metadata(data: &[u8]) -> Result<Metadata> {
    if !data.starts_with(HDR_METADATA) || data.len() < 20 {
       return Err(AirPodsError::InvalidPacket(
          "Invalid metadata packet".into(),
       ));
    }
 
-   let mut metadata = HashMap::new();
-   metadata.insert(
-      "packet_type".to_string(),
-      serde_json::Value::String("metadata".to_string()),
-   );
-   metadata.insert(
-      "raw_data".to_string(),
-      serde_json::Value::String(hex::encode(data)),
-   );
-   metadata.insert(
-      "length".to_string(),
-      serde_json::Value::Number(data.len().into()),
-   );
-
    // Try to extract device name if present
+   let mut name_candidate = None;
    if data.len() > 15 {
       let payload = &data[6..];
       for i in 0..payload.len().saturating_sub(5) {
          let chunk = &payload[i..i.min(payload.len()).min(i + 10)];
-         if let Ok(text) = std::str::from_utf8(chunk)
+         if let Ok(text) = str::from_utf8(chunk)
             && text.chars().any(|c| c.is_alphabetic())
             && text.trim().len() > 2
          {
-            metadata.insert(
-               "possible_name".to_string(),
-               serde_json::Value::String(text.trim().to_string()),
-            );
+            name_candidate = Some(Arc::from(text.trim()));
             break;
          }
       }
    }
 
-   Ok(metadata)
+   Ok(Metadata { name_candidate })
 }
