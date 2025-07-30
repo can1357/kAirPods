@@ -1,6 +1,6 @@
 [package]
 name = "kde-airpods-service"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2024"
 
 authors = ["Can Boluk <me@can.ac>"]
@@ -32,6 +32,9 @@ parking_lot = "0.12"
 heapless = "0.8"
 smallvec = "1.10"
 smol_str = "0.3"
+rand = "0.8"
+strum = { version = "0.27", features = ["derive"] }
+
 
 [[bin]]
 name = "kde-airpods-service"

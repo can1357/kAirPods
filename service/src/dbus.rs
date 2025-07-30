@@ -4,7 +4,10 @@ use bluer::Address;
 use log::info;
 use zbus::{interface, object_server::SignalEmitter, zvariant};
 
-use crate::{airpods::protocol::NoiseControlMode, bluetooth::manager::BluetoothManager};
+use crate::{
+   airpods::protocol::{FeatureId, NoiseControlMode},
+   bluetooth::manager::BluetoothManager,
+};
 
 pub struct AirPodsService {
    bluetooth_manager: BluetoothManager,
@@ -65,8 +68,9 @@ impl AirPodsService {
                .downcast_ref::<String>()
                .map_err(|e| to_arg_error(format_args!("Invalid 'value' parameter: {e}")))?;
 
-            let mode = NoiseControlMode::from_str(mode_str.as_str())
-               .ok_or_else(|| to_arg_error(format_args!("Invalid noise mode: {mode_str}")))?;
+            let mode: NoiseControlMode = mode_str
+               .parse()
+               .map_err(|_| to_arg_error(format_args!("Invalid noise mode: {mode_str:?}")))?;
 
             dev.set_noise_control(mode).await?;
 
@@ -74,11 +78,15 @@ impl AirPodsService {
          },
 
          "set_feature" => {
-            let feature = params
+            let feature_str = params
                .get("feature")
                .ok_or_else(|| to_arg_error("Missing 'feature' parameter"))?
                .downcast_ref::<String>()
                .map_err(|e| to_arg_error(format_args!("Invalid 'feature' parameter: {e}")))?;
+
+            let feature: FeatureId = feature_str
+               .parse()
+               .map_err(|_| to_arg_error(format_args!("Invalid feature: {feature_str:?}")))?;
 
             let enabled = params
                .get("enabled")
@@ -90,8 +98,7 @@ impl AirPodsService {
                   ))
                })?;
 
-            dev.set_feature(feature.as_str(), enabled).await?;
-
+            dev.set_feature(feature, enabled).await?;
             info!("Set feature {feature} to {enabled} for {address}");
          },
 
@@ -105,13 +112,13 @@ impl AirPodsService {
 
    async fn connect_device(&self, address: String) -> zbus::fdo::Result<bool> {
       let addr = Address::from_str(&address).map_err(to_arg_error)?;
-      self.bluetooth_manager.connect_device(addr).await?;
+      self.bluetooth_manager.establish_aap(addr).await?;
       Ok(true)
    }
 
    async fn disconnect_device(&self, address: String) -> zbus::fdo::Result<bool> {
       let addr = Address::from_str(&address).map_err(to_arg_error)?;
-      self.bluetooth_manager.disconnect_device(addr).await?;
+      self.bluetooth_manager.disconnect_aap(addr).await?;
       Ok(true)
    }
 

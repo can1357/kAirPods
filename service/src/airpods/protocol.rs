@@ -3,7 +3,7 @@
 //! This module contains all the protocol-specific constants, packet
 //! definitions, and data structures for communicating with `AirPods` devices.
 
-use std::{fmt, num::NonZeroU8, sync::LazyLock};
+use std::{fmt, num::NonZeroU8, str::FromStr, sync::LazyLock};
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -33,26 +33,38 @@ pub const HDR_EAR_DETECTION: &[u8] = b"\x04\x00\x04\x00\x06\x00";
 
 /// Represents different components of `AirPods`.
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+   Debug,
+   Clone,
+   Copy,
+   PartialEq,
+   Eq,
+   Serialize,
+   Deserialize,
+   strum::FromRepr,
+   strum::Display,
+   strum::EnumString,
+)]
 pub enum Component {
    Right = 0x02,
    Left = 0x04,
    Case = 0x08,
 }
 
-impl fmt::Display for Component {
-   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-      match self {
-         Self::Right => write!(f, "Right"),
-         Self::Left => write!(f, "Left"),
-         Self::Case => write!(f, "Case"),
-      }
-   }
-}
-
 /// Battery status for `AirPods` components.
+#[derive(
+   Debug,
+   Clone,
+   Copy,
+   PartialEq,
+   Eq,
+   Serialize,
+   Deserialize,
+   strum::FromRepr,
+   strum::Display,
+   strum::EnumString,
+)]
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BatteryStatus {
    Normal = 0x00,
    Charging = 0x01,
@@ -60,59 +72,35 @@ pub enum BatteryStatus {
    Disconnected = 0x04,
 }
 
-impl fmt::Display for BatteryStatus {
-   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-      match self {
-         Self::Normal => write!(f, "Normal"),
-         Self::Charging => write!(f, "Charging"),
-         Self::Discharging => write!(f, "Discharging"),
-         Self::Disconnected => write!(f, "Disconnected"),
-      }
-   }
-}
-
 /// Noise control modes supported by `AirPods`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+   Debug,
+   Clone,
+   Copy,
+   PartialEq,
+   Eq,
+   Serialize,
+   Deserialize,
+   strum::FromRepr,
+   strum::Display,
+   strum::EnumString,
+   strum::IntoStaticStr,
+)]
 #[repr(u32)]
 pub enum NoiseControlMode {
+   #[strum(serialize = "off")]
    Off = 0x01,
+   #[strum(serialize = "nc")]
    NC = 0x02,
+   #[strum(serialize = "trans", serialize = "transparency")]
    Trans = 0x03,
+   #[strum(serialize = "adapt", serialize = "adaptive")]
    Adapt = 0x04,
 }
 
 impl NoiseControlMode {
-   pub fn from_str(s: &str) -> Option<Self> {
-      if s.eq_ignore_ascii_case("off") {
-         return Some(Self::Off);
-      } else if s.eq_ignore_ascii_case("nc") {
-         return Some(Self::NC);
-      } else if s.eq_ignore_ascii_case("trans") || s.eq_ignore_ascii_case("transparency") {
-         return Some(Self::Trans);
-      } else if s.eq_ignore_ascii_case("adapt") || s.eq_ignore_ascii_case("adaptive") {
-         return Some(Self::Adapt);
-      }
-      None
-   }
-
-   pub const fn to_str(self) -> &'static str {
-      match self {
-         Self::Off => "off",
-         Self::NC => "nc",
-         Self::Trans => "trans",
-         Self::Adapt => "adapt",
-      }
-   }
-}
-
-impl fmt::Display for NoiseControlMode {
-   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-      match self {
-         Self::Off => write!(f, "Off"),
-         Self::NC => write!(f, "NC"),
-         Self::Trans => write!(f, "Trans"),
-         Self::Adapt => write!(f, "Adapt"),
-      }
+   pub fn to_str(self) -> &'static str {
+      self.into()
    }
 }
 
@@ -131,6 +119,19 @@ pub const KNOWN_FEATURES: &[(u8, &str)] = &[
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct FeatureId(u8);
+
+impl FromStr for FeatureId {
+   type Err = strum::ParseError;
+
+   fn from_str(s: &str) -> Result<Self, Self::Err> {
+      for (repr, name) in KNOWN_FEATURES {
+         if name.eq_ignore_ascii_case(s) {
+            return Ok(Self(*repr));
+         }
+      }
+      Err(strum::ParseError::VariantNotFound)
+   }
+}
 
 static U8_TO_HEX: LazyLock<[[u8; 2]; 256]> = LazyLock::new(|| {
    let mut featids = [[0u8; 2]; 256];
@@ -159,15 +160,6 @@ impl FeatureId {
 
    pub const fn id(self) -> u8 {
       self.0
-   }
-
-   pub fn from_str(s: &str) -> Option<Self> {
-      for (repr, name) in KNOWN_FEATURES {
-         if name.eq_ignore_ascii_case(s) {
-            return Some(Self(*repr));
-         }
-      }
-      None
    }
 
    pub const fn bitpos(self) -> (usize, u64) {

@@ -1,7 +1,7 @@
-//! AirPods device implementation and state management.
+//! `AirPods` device implementation and state management.
 //!
 //! This module provides the core `AirPods` type which represents a connected
-//! AirPods device, manages its state, and handles communication over L2CAP.
+//! `AirPods` device, manages its state, and handles communication over L2CAP.
 
 use core::fmt;
 use std::{
@@ -53,7 +53,7 @@ impl Drop for ConnectionState {
    }
 }
 
-/// Internal shared state for an AirPods device.
+/// Internal shared state for an `AirPods` device.
 #[derive(Debug, Default)]
 struct AirPodsInner {
    address: Address,
@@ -68,13 +68,13 @@ struct AirPodsInner {
    conn: RwLock<Option<ConnectionState>>,
 }
 
-/// Represents a connected AirPods device.
+/// Represents a connected `AirPods` device.
 ///
 /// This type is cheaply cloneable and thread-safe.
 #[derive(Clone)]
 pub struct AirPods(Arc<AirPodsInner>);
 
-/// Weak reference to an AirPods device.
+/// Weak reference to an `AirPods` device.
 #[derive(Debug, Clone)]
 pub struct WeakAirPods(Weak<AirPodsInner>);
 
@@ -131,7 +131,7 @@ impl<T: PartialEq> UpdateOp<T> {
 }
 
 impl AirPods {
-   /// Creates a new AirPods device instance.
+   /// Creates a new `AirPods` device instance.
    pub fn new(address: Address, name: String) -> Self {
       Self(
          AirPodsInner {
@@ -275,7 +275,7 @@ impl AirPods {
       prev & mask != 0
    }
 
-   /// Establishes an L2CAP connection to the AirPods device.
+   /// Establishes an L2CAP connection to the `AirPods` device.
    ///
    /// Returns a join handle that resolves when the connection is closed.
    pub async fn connect(&self, event_tx: &EventSender) -> Result<JoinHandle<Option<AirPodsError>>> {
@@ -454,19 +454,16 @@ impl AirPods {
       }
    }
 
-   pub async fn set_feature(&self, feature: &str, enabled: bool) -> Result<()> {
-      let feat = FeatureId::from_str(feature)
-         .ok_or_else(|| AirPodsError::FeatureNotSupported(feature.into()))?;
-
+   pub async fn set_feature(&self, feature: FeatureId, enabled: bool) -> Result<()> {
       let conn = self.0.conn.read().await;
       if let Some(conn) = conn.as_ref() {
          let packet = if enabled {
-            FeatureCmd::Enable.build(feat.id())
+            FeatureCmd::Enable.build(feature.id())
          } else {
-            FeatureCmd::Disable.build(feat.id())
+            FeatureCmd::Disable.build(feature.id())
          };
          conn.sender.send(&packet).await?;
-         self.set_feature_enabled(feat, enabled);
+         self.set_feature_enabled(feature, enabled);
          Ok(())
       } else {
          Err(AirPodsError::DeviceNotConnected)

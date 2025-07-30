@@ -1,7 +1,7 @@
-//! L2CAP socket implementation for AirPods communication.
+//! L2CAP socket implementation for `AirPods` communication.
 //!
 //! This module provides async L2CAP socket handling with separate
-//! sender and receiver channels for communicating with AirPods.
+//! sender and receiver channels for communicating with `AirPods`.
 
 use std::{sync::Arc, time::Duration};
 
@@ -21,7 +21,7 @@ use crate::error::{AirPodsError, Result};
 
 pub type Packet = SmallVec<[u8; 32]>;
 
-/// PSM (Protocol Service Multiplexer) for AirPods control channel
+/// PSM (Protocol Service Multiplexer) for `AirPods` control channel
 const PSM_CONTROL: u16 = 0x1001;
 /// Maximum transmission unit for L2CAP packets
 const L2CAP_MTU: usize = 672;
@@ -39,7 +39,7 @@ enum Command {
 
 /// Receiver half of an L2CAP connection.
 ///
-/// Provides async packet reception from the AirPods device.
+/// Provides async packet reception from the `AirPods` device.
 #[derive(Debug)]
 pub struct L2CapReceiver {
    rx: mpsc::Receiver<Result<Packet>>,
@@ -53,7 +53,7 @@ impl L2CapReceiver {
 
 /// Sender half of an L2CAP connection.
 ///
-/// Provides async packet transmission to the AirPods device.
+/// Provides async packet transmission to the `AirPods` device.
 /// This type is cheaply cloneable.
 #[derive(Debug, Clone)]
 pub struct L2CapSender {

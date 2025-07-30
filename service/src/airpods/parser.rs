@@ -1,7 +1,7 @@
-//! Packet parsing utilities for AirPods protocol.
+//! Packet parsing utilities for `AirPods` protocol.
 //!
-//! This module contains functions to parse various packet types received
-//! from AirPods devices over the L2CAP connection.
+//! This module contains functions to parse various AAP packet types received
+//! from `AirPods` devices over the L2CAP connection.
 
 use std::str;
 
@@ -13,25 +13,71 @@ use crate::{
       BatteryInfo, BatteryState, BatteryStatus, Component, EarDetectionStatus, HDR_BATTERY_STATE,
       HDR_EAR_DETECTION, HDR_METADATA, NoiseControlMode,
    },
-   error::{AirPodsError, Result},
+   error::Result,
 };
 
-/// Parses a battery status packet from AirPods.
+use thiserror::Error;
+
+/// Error type for protocol parsing.
+#[derive(Error, Debug)]
+pub enum ProtoError {
+   /// Packet is not of the expected type
+   #[error("Not a {expected} packet")]
+   WrongPacketType { expected: &'static str },
+
+   /// Packet is too short for the expected format
+   #[error("Packet too short: expected at least {expected} bytes, got {actual}")]
+   PacketTooShort { expected: usize, actual: usize },
+
+   /// Invalid battery count in battery status packet
+   #[error("Invalid battery count: {count} (must be 0-3)")]
+   InvalidBatteryCount { count: u8 },
+
+   /// Packet size doesn't match expected size based on content
+   #[error("Packet size mismatch: expected {expected} bytes, got {actual} bytes")]
+   PacketSizeMismatch { expected: usize, actual: usize },
+
+   /// Bad padding in packet structure
+   #[error(
+      "Bad padding at offset {offset}: expected 0x01, got pad1=0x{pad1:02x}, pad2=0x{pad2:02x}"
+   )]
+   BadPadding { offset: usize, pad1: u8, pad2: u8 },
+
+   /// Unknown component type in battery status
+   #[error("Unknown component type: 0x{component_type:02x}")]
+   UnknownComponentType { component_type: u8 },
+
+   /// Unknown noise control mode
+   #[error("Unknown noise control mode: 0x{mode:02x}")]
+   UnknownNoiseMode { mode: u32 },
+
+   /// Generic invalid packet format
+   #[error("Invalid packet format: {reason}")]
+   InvalidFormat { reason: &'static str },
+}
+
+/// Parses a battery status packet from `AirPods`.
 ///
 /// The packet format contains battery information for up to 3 components
 /// (left, right, case).
 pub fn parse_battery_status(data: &[u8]) -> Result<BatteryInfo> {
    if !data.starts_with(HDR_BATTERY_STATE) {
-      return Err(AirPodsError::InvalidPacket(
-         "Not a battery status packet".into(),
-      ));
+      return Err(
+         ProtoError::WrongPacketType {
+            expected: "battery status",
+         }
+         .into(),
+      );
    }
 
    if data.len() < 7 {
-      return Err(AirPodsError::InvalidPacket(format!(
-         "Battery packet too short: {} bytes",
-         data.len()
-      )));
+      return Err(
+         ProtoError::PacketTooShort {
+            expected: 7,
+            actual: data.len(),
+         }
+         .into(),
+      );
    }
 
    let battery_count = data[6];
@@ -45,13 +91,23 @@ pub fn parse_battery_status(data: &[u8]) -> Result<BatteryInfo> {
       data.len()
    );
 
-   if battery_count > 3 || data.len() != expected_length {
-      return Err(AirPodsError::InvalidPacket(format!(
-         "Invalid battery count ({}) or size mismatch (expected {}, got {})",
-         battery_count,
-         expected_length,
-         data.len()
-      )));
+   if battery_count > 3 {
+      return Err(
+         ProtoError::InvalidBatteryCount {
+            count: battery_count,
+         }
+         .into(),
+      );
+   }
+
+   if data.len() != expected_length {
+      return Err(
+         ProtoError::PacketSizeMismatch {
+            expected: expected_length,
+            actual: data.len(),
+         }
+         .into(),
+      );
    }
 
    let mut battery_info = BatteryInfo::new();
@@ -65,45 +121,32 @@ pub fn parse_battery_status(data: &[u8]) -> Result<BatteryInfo> {
          continue;
       }
 
-      let component_type = data[offset];
-      let spacer1 = data[offset + 1];
+      let id = data[offset];
+      let pad1 = data[offset + 1];
       let level = data[offset + 2];
       let status = data[offset + 3];
-      let spacer2 = data[offset + 4];
+      let pad2 = data[offset + 4];
 
       debug!(
-         "Component {i}: type=0x{component_type:02x}, spacer1=0x{spacer1:02x}, level={level}, status=0x{status:02x}, spacer2=0x{spacer2:02x}"
+         "Component {i}: type=0x{id:02x}, pad1=0x{pad1:02x}, level={level}, status=0x{status:02x}, pad2=0x{pad2:02x}"
       );
 
-      if spacer1 != 0x01 || spacer2 != 0x01 {
-         warn!(
-            "Invalid spacer bytes for component {i}: spacer1=0x{spacer1:02x}, spacer2=0x{spacer2:02x}"
-         );
-         return Err(AirPodsError::InvalidPacket("Invalid spacer bytes".into()));
+      if pad1 != 0x01 || pad2 != 0x01 {
+         warn!("Invalid pad bytes for component {i}: pad1=0x{pad1:02x}, pad2=0x{pad2:02x}");
+         return Err(ProtoError::BadPadding { offset, pad1, pad2 }.into());
       }
 
-      let component = match component_type {
-         0x02 => Component::Right,
-         0x04 => Component::Left,
-         0x08 => Component::Case,
-         _ => {
-            warn!("Unknown component type 0x{component_type:02x}");
-            continue;
-         },
+      let Some(component) = Component::from_repr(id) else {
+         warn!("Unknown component type 0x{id:02x}");
+         continue;
       };
 
-      let bat_status = match status {
-         0x00 => BatteryStatus::Normal,
-         0x01 => BatteryStatus::Charging,
-         0x02 => BatteryStatus::Discharging,
-         0x04 => BatteryStatus::Disconnected,
-         _ => {
-            warn!(
-               "Unknown battery status 0x{status:02x} for component {component}, treating as Normal"
-            );
-            BatteryStatus::Normal
-         },
-      };
+      let bat_status = BatteryStatus::from_repr(status).unwrap_or_else(|| {
+         warn!(
+            "Unknown battery status 0x{status:02x} for component {component}, treating as Normal"
+         );
+         BatteryStatus::Normal
+      });
 
       debug!("Parsed component: {component} = {level}% ({bat_status})");
 
@@ -150,29 +193,39 @@ pub fn parse_battery_status(data: &[u8]) -> Result<BatteryInfo> {
 
 pub fn parse_noise_mode(data: &[u8]) -> Result<NoiseControlMode> {
    if data.len() < 8 {
-      return Err(AirPodsError::InvalidPacket(
-         "Noise control packet too short".into(),
-      ));
+      return Err(
+         ProtoError::PacketTooShort {
+            expected: 8,
+            actual: data.len(),
+         }
+         .into(),
+      );
    }
 
-   let mode = data[7] - 1;
-   match mode + 1 {
-      0x01 => Ok(NoiseControlMode::Off),
-      0x02 => Ok(NoiseControlMode::NC),
-      0x03 => Ok(NoiseControlMode::Trans),
-      0x04 => Ok(NoiseControlMode::Adapt),
-      _ => Err(AirPodsError::InvalidPacket(format!(
-         "Unknown noise mode: {}",
-         mode + 1
-      ))),
-   }
+   let mode = u32::from(data[7]);
+   let Some(mode) = NoiseControlMode::from_repr(mode) else {
+      return Err(ProtoError::UnknownNoiseMode { mode }.into());
+   };
+   Ok(mode)
 }
 
 pub fn parse_ear_detection(data: &[u8]) -> Result<EarDetectionStatus> {
-   if !data.starts_with(HDR_EAR_DETECTION) || data.len() < 8 {
-      return Err(AirPodsError::InvalidPacket(
-         "Invalid ear detection packet".into(),
-      ));
+   if !data.starts_with(HDR_EAR_DETECTION) {
+      return Err(
+         ProtoError::WrongPacketType {
+            expected: "ear detection",
+         }
+         .into(),
+      );
+   }
+   if data.len() < 8 {
+      return Err(
+         ProtoError::PacketTooShort {
+            expected: 8,
+            actual: data.len(),
+         }
+         .into(),
+      );
    }
    let left_out = data[6] == 0x01;
    let right_out = data[7] == 0x01;
@@ -185,10 +238,22 @@ pub struct Metadata {
 }
 
 pub fn parse_metadata(data: &[u8]) -> Result<Metadata> {
-   if !data.starts_with(HDR_METADATA) || data.len() < 20 {
-      return Err(AirPodsError::InvalidPacket(
-         "Invalid metadata packet".into(),
-      ));
+   if !data.starts_with(HDR_METADATA) {
+      return Err(
+         ProtoError::WrongPacketType {
+            expected: "metadata",
+         }
+         .into(),
+      );
+   }
+   if data.len() < 20 {
+      return Err(
+         ProtoError::PacketTooShort {
+            expected: 20,
+            actual: data.len(),
+         }
+         .into(),
+      );
    }
 
    // Try to extract device name if present

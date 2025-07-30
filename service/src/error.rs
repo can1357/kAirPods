@@ -4,9 +4,13 @@
 //! of the `AirPods` service, including Bluetooth, D-Bus, I/O, and protocol
 //! errors.
 
+use std::io;
+
 use bluer::Address;
 use thiserror::Error;
 use tokio::task::JoinError;
+
+use crate::airpods::parser;
 
 /// Main error type for the `AirPods` service.
 #[derive(Error, Debug)]
@@ -21,7 +25,7 @@ pub enum AirPodsError {
    DBusConnection(#[from] zbus::fdo::Error),
 
    #[error("I/O error: {0}")]
-   Io(#[from] std::io::Error),
+   Io(#[from] io::Error),
 
    #[error("Device not found: {0}")]
    DeviceNotFound(Address),
@@ -29,8 +33,11 @@ pub enum AirPodsError {
    #[error("Device not connected")]
    DeviceNotConnected,
 
+   #[error("Device not paired")]
+   DeviceNotPaired,
+
    #[error("Invalid packet: {0}")]
-   InvalidPacket(String),
+   InvalidPacket(#[from] parser::ProtoError),
 
    #[error("Feature not supported: {0}")]
    FeatureNotSupported(String),
@@ -74,6 +81,6 @@ pub type Result<T, E = AirPodsError> = std::result::Result<T, E>;
 
 impl From<AirPodsError> for zbus::fdo::Error {
    fn from(error: AirPodsError) -> Self {
-      zbus::fdo::Error::Failed(error.to_string())
+      Self::Failed(error.to_string())
    }
 }

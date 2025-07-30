@@ -95,17 +95,27 @@ impl Config {
    }
 
    fn config_path() -> Result<PathBuf> {
-      let config_dir = if let Ok(airpods_home) = env::var("AIRPODS_HOME") {
-         PathBuf::from(airpods_home)
-      } else if let Ok(config_home) = env::var("XDG_CONFIG_HOME") {
-         PathBuf::from(config_home)
-      } else if let Ok(home) = env::var("HOME") {
-         PathBuf::from(home).join(".config")
-      } else {
-         return Err(AirPodsError::ConfigDirNotFound);
-      };
-
-      Ok(config_dir.join("airpods-service").join("config.toml"))
+      static PATHS: &[(&str, Option<&str>)] = &[
+         ("AIRPODS_HOME", None),
+         ("XDG_CONFIG_HOME", None),
+         ("HOME", Some(".config")),
+      ];
+      Ok(PATHS
+         .iter()
+         .find_map(|(var, sub)| {
+            if let Ok(value) = env::var(var) {
+               let mut pb = PathBuf::from(value);
+               if let Some(sub) = sub {
+                  pb.push(sub);
+               }
+               Some(pb)
+            } else {
+               None
+            }
+         })
+         .ok_or(AirPodsError::ConfigDirNotFound)?
+         .join("airpods-service")
+         .join("config.toml"))
    }
 
    /// Checks if the given address is a known device and returns its name.
