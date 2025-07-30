@@ -13,7 +13,6 @@ ProtectSystem=strict
 ProtectHome=read-only
 NoNewPrivileges=yes
 ReadWritePaths=/var/run/dbus
-SupplementaryGroups=bluetooth
 
 [Install]
 WantedBy=default.target
