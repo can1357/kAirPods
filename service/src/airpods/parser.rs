@@ -37,12 +37,6 @@ pub enum ProtoError {
    #[error("Packet size mismatch: expected {expected} bytes, got {actual} bytes")]
    PacketSizeMismatch { expected: usize, actual: usize },
 
-   /// Bad padding in packet structure
-   #[error(
-      "Bad padding at offset {offset}: expected 0x01, got pad1=0x{pad1:02x}, pad2=0x{pad2:02x}"
-   )]
-   BadPadding { offset: usize, pad1: u8, pad2: u8 },
-
    /// Unknown component type in battery status
    #[error("Unknown component type: 0x{component_type:02x}")]
    UnknownComponentType { component_type: u8 },
@@ -111,7 +105,6 @@ pub fn parse_battery_status(data: &[u8]) -> Result<BatteryInfo> {
    }
 
    let mut battery_info = BatteryInfo::new();
-   let mut pods_in_packet = Vec::new();
 
    for i in 0..battery_count {
       let offset = 7 + (5 * i) as usize;
@@ -130,11 +123,6 @@ pub fn parse_battery_status(data: &[u8]) -> Result<BatteryInfo> {
       debug!(
          "Component {i}: type=0x{id:02x}, pad1=0x{pad1:02x}, level={level}, status=0x{status:02x}, pad2=0x{pad2:02x}"
       );
-
-      if pad1 != 0x01 || pad2 != 0x01 {
-         warn!("Invalid pad bytes for component {i}: pad1=0x{pad1:02x}, pad2=0x{pad2:02x}");
-         return Err(ProtoError::BadPadding { offset, pad1, pad2 }.into());
-      }
 
       let Some(component) = Component::from_repr(id) else {
          warn!("Unknown component type 0x{id:02x}");
@@ -162,32 +150,16 @@ pub fn parse_battery_status(data: &[u8]) -> Result<BatteryInfo> {
             Component::Case => battery_info.case = battery_state,
          }
 
-         if matches!(component, Component::Left | Component::Right) {
-            pods_in_packet.push(component);
-         }
+         /*if matches!(component, Component::Left | Component::Right) {
+            if battery_info.primary_pod.is_none() {
+               battery_info.primary_pod = Some(component);
+            } else {
+               battery_info.secondary_pod = Some(component);
+            }
+         }*/
       }
    }
-
-   // Set primary and secondary pods based on order
-   /*
-   if !pods_in_packet.is_empty() {
-       battery_info.primary_pod = Some(pods_in_packet[0]);
-       if pods_in_packet.len() >= 2 {
-           battery_info.secondary_pod = Some(pods_in_packet[1]);
-       }
-   }
-   */
-
-   debug!(
-      "Battery parsed - L:{}%({}) R:{}%({}) C:{}%({})",
-      battery_info.left.level,
-      battery_info.left.status,
-      battery_info.right.level,
-      battery_info.right.status,
-      battery_info.case.level,
-      battery_info.case.status
-   );
-
+   debug!("Battery parsed - {battery_info}");
    Ok(battery_info)
 }
 

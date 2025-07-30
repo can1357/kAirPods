@@ -199,6 +199,12 @@ pub struct BatteryState {
    pub status: BatteryStatus,
 }
 
+impl fmt::Display for BatteryState {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      write!(f, "{}%({})", self.level, self.status)
+   }
+}
+
 impl BatteryState {
    pub const fn new() -> Self {
       Self {
@@ -222,6 +228,12 @@ pub struct BatteryInfo {
    pub left: BatteryState,
    pub right: BatteryState,
    pub case: BatteryState,
+}
+
+impl fmt::Display for BatteryInfo {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      write!(f, "L:{} R:{} C:{}", self.left, self.right, self.case)
+   }
 }
 
 impl BatteryInfo {

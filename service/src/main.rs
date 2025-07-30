@@ -11,16 +11,16 @@ use log::{info, warn};
 use tokio::{signal, sync::Notify, time};
 use zbus::{Connection, connection, object_server::InterfaceRef};
 
+use bluetooth::manager::BluetoothManager;
+use dbus::AirPodsService;
+use event::{AirPodsEvent, EventBus};
+
 mod airpods;
 mod bluetooth;
 mod config;
 mod dbus;
 mod error;
 mod event;
-
-use bluetooth::manager::BluetoothManager;
-use dbus::AirPodsService;
-use event::{AirPodsEvent, EventBus};
 
 use crate::{airpods::device::AirPods, dbus::AirPodsServiceSignals, error::Result};
 
