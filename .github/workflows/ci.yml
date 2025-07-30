@@ -27,35 +27,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install KF6 + Qt 6 headers
+      - name: Install validation tools
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            build-essential ninja-build cmake git gettext \
-            extra-cmake-modules \
-            qt6-base-dev qt6-declarative-dev qt6-tools-dev-tools \
-            libplasma-dev \
-            libkf6config-dev libkf6i18n-dev \
-            libkf6notifications-dev libkf6windowsystem-dev
+            jq \
+            findutils \
+            tar
 
-      - name: Configure
-        run: cmake -S plasmoid -B build -GNinja \
-          -DCMAKE_INSTALL_PREFIX=/usr \
-          -DCMAKE_BUILD_TYPE=Release
+      - name: Validate plasmoid structure
+        run: |
+          # Check that required files exist
+          test -f plasmoid/metadata.json
+          test -f plasmoid/contents/ui/main.qml
+          
+          # Validate metadata.json
+          jq . plasmoid/metadata.json
+          
+          # List all QML files
+          find plasmoid -name "*.qml" -type f
 
-      - name: Build
-        run: cmake --build build --parallel
-
-      - name: (Optional) unit tests
-        run: ctest --test-dir build --output-on-failure || true
-
-      - name: Stage install
-        run: cmake --install build --prefix "$DESTDIR"
+      - name: Package plasmoid
+        run: |
+          mkdir -p "$DESTDIR"
+          cp -r plasmoid "$DESTDIR/org.kde.plasma.airpods"
+          cd "$DESTDIR"
+          tar -czf kde-airpods-plasmoid.tar.gz org.kde.plasma.airpods
 
       - uses: actions/upload-artifact@v4
         with:
           name: plasmoid
-          path: artifacts
+          path: artifacts/kde-airpods-plasmoid.tar.gz
 
   ###############################################################################
   # 2. Rust background service

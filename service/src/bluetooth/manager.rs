@@ -267,11 +267,14 @@ impl ManagerActor {
             // Start monitoring this adapter
             let monitor_handle = self.start_adapter_monitor(name.clone(), adapter.clone());
 
-            self.adapters.insert(name.clone(), AdapterInfo {
-               adapter,
-               state: AdapterState::Active,
-               monitor_handle: Some(monitor_handle),
-            });
+            self.adapters.insert(
+               name.clone(),
+               AdapterInfo {
+                  adapter,
+                  state: AdapterState::Active,
+                  monitor_handle: Some(monitor_handle),
+               },
+            );
 
             // Check for already connected devices
             self.check_connected_devices(&name).await;
