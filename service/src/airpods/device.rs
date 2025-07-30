@@ -106,11 +106,12 @@ pub enum UpdateOp<T> {
    Updated(T),
 }
 
-impl<T: PartialEq + Clone> UpdateOp<T> {
-   fn apply_atomic(dst: &AtomicCell<Option<T>>, new: Option<T>) -> Self {
-      let new_set = new.clone();
-      let prev = dst.swap(new_set);
-      Self::new(prev, new)
+impl<T: PartialEq> UpdateOp<T> {
+   fn apply_atomic(dst: &AtomicCell<Option<T>>, new: Option<T>) -> Self
+   where
+      T: Copy,
+   {
+      Self::new(dst.swap(new), new)
    }
 
    fn new(prev: Option<T>, new: Option<T>) -> Self {

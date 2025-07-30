@@ -513,10 +513,8 @@ impl ManagerActor {
 
       self.devices.insert(addr, managed);
 
-      // Auto-connect if configured
-      if self.config.is_known_device(&addr.to_string()).is_some() {
-         let _ = self.connect_device(addr).await;
-      }
+      // Auto-connect to any discovered AirPods
+      let _ = self.connect_device(addr).await;
    }
 
    async fn handle_device_connected(&mut self, addr: Address) {
@@ -541,8 +539,7 @@ impl ManagerActor {
 
             // Schedule reconnection
             let loopback = self.loopback_tx.clone();
-            let delay = Duration::from_secs(2u64.pow(device.retry_count)); // Exponential backoff
-
+            let delay = Duration::from_secs(1 << device.retry_count);
             tokio::spawn(async move {
                time::sleep(delay).await;
                let _ = loopback
