@@ -11,6 +11,7 @@ use std::{
 use bluer::{Adapter, AdapterEvent, Address, Session};
 use futures::stream::StreamExt;
 use log::{debug, error, info, warn};
+use smol_str::SmolStr;
 use tokio::{
    select,
    sync::{mpsc, oneshot},
@@ -27,6 +28,8 @@ use crate::{
 
 /// Device name patterns to identify AirPods and compatible devices
 const AIRPOD_PATTERNS: &[&str] = &["AirPods", "Beats", "Powerbeats"];
+/// Interval to poll for new devices
+const POLL_DEVICES_INTERVAL: Duration = Duration::from_secs(5);
 /// Delay before retrying adapter operations after failure
 const ADAPTER_RECOVERY_DELAY: Duration = Duration::from_secs(5);
 /// Maximum time to wait for a device connection
@@ -63,7 +66,7 @@ enum DeviceConnectionState {
 struct ManagedDevice {
    device: AirPods,
    state: DeviceConnectionState,
-   adapter_name: String,
+   adapter_name: SmolStr,
    retry_count: u32,
    last_error: Option<String>,
 }
@@ -73,12 +76,12 @@ struct ManagedDevice {
 #[derive(Debug)]
 enum ManagerCommand {
    // Adapter events
-   AdapterAvailable(String, Adapter),
-   AdapterLost(String),
-   AdapterError(String, String), // adapter_name, error
+   AdapterAvailable(SmolStr, Adapter),
+   AdapterLost(SmolStr),
+   AdapterError(SmolStr, String), // adapter_name, error
 
    // Device events
-   DeviceDiscovered(Address, String), // address, adapter_name
+   DeviceDiscovered(Address, SmolStr), // address, adapter_name
    DeviceConnected(Address),
    DeviceDisconnected(Address, bool), // address, is_error
    DeviceLost(Address),
@@ -180,7 +183,7 @@ struct ManagerActor {
    session: Session,
 
    // State
-   adapters: HashMap<String, AdapterInfo>,
+   adapters: HashMap<SmolStr, AdapterInfo>,
    devices: HashMap<Address, ManagedDevice>,
    connecting_devices: HashSet<Address>, // Prevent duplicate connections
 
@@ -221,9 +224,19 @@ impl ManagerActor {
       // Initialize adapters
       self.initialize_adapters().await;
 
+      // Start periodic device check
+      let mut check_interval = time::interval(POLL_DEVICES_INTERVAL);
+      check_interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
+
       // Main event loop
       loop {
          select! {
+             _ = check_interval.tick() => {
+                 // Periodically check for new devices
+                 for adapter_name in self.adapters.keys().cloned().collect::<Vec<_>>() {
+                     self.check_connected_devices(&adapter_name).await;
+                 }
+             }
              cmd = self.command_rx.recv() => {
                  let Some(cmd) = cmd else {
                      info!("Bluetooth manager shutting down");
@@ -249,7 +262,7 @@ impl ManagerActor {
       match self.session.adapter_names().await {
          Ok(names) => {
             for name in names {
-               self.initialize_adapter(name).await;
+               self.initialize_adapter(name.into()).await;
             }
          },
          Err(e) => {
@@ -259,11 +272,11 @@ impl ManagerActor {
 
       // If no adapters found, try default
       if self.adapters.is_empty() {
-         self.initialize_adapter("hci0".to_string()).await;
+         self.initialize_adapter(SmolStr::new_static("hci0")).await;
       }
    }
 
-   async fn initialize_adapter(&mut self, name: String) {
+   async fn initialize_adapter(&mut self, name: SmolStr) {
       match self.session.adapter(&name) {
          Ok(adapter) => {
             info!("Initializing adapter: {name}");
@@ -282,6 +295,11 @@ impl ManagerActor {
 
             // Check for already connected devices
             self.check_connected_devices(&name).await;
+
+            // Start discovery to find new devices
+            //if let Err(e) = adapter.discover_devices().await {
+            //   warn!("Failed to start discovery on {name}: {e}");
+            //}
          },
          Err(e) => {
             warn!("Failed to initialize adapter {name}: {e}");
@@ -289,7 +307,7 @@ impl ManagerActor {
       }
    }
 
-   fn start_adapter_monitor(&self, name: String, adapter: Adapter) -> JoinHandle<()> {
+   fn start_adapter_monitor(&self, name: SmolStr, adapter: Adapter) -> JoinHandle<()> {
       let loopback = self.loopback_tx.clone();
       tokio::spawn(async move {
          let Ok(mut events) = adapter.events().await else {
@@ -323,7 +341,7 @@ impl ManagerActor {
       })
    }
 
-   async fn check_connected_devices(&mut self, adapter_name: &str) {
+   async fn check_connected_devices(&mut self, adapter_name: &SmolStr) {
       let Some(adapter_info) = self.adapters.get(adapter_name) else {
          return;
       };
@@ -339,10 +357,7 @@ impl ManagerActor {
          {
             let _ = self
                .loopback_tx
-               .send(ManagerCommand::DeviceDiscovered(
-                  addr,
-                  adapter_name.to_string(),
-               ))
+               .send(ManagerCommand::DeviceDiscovered(addr, adapter_name.clone()))
                .await;
          }
       }
@@ -414,7 +429,7 @@ impl ManagerActor {
       true
    }
 
-   async fn handle_adapter_available(&mut self, name: String, adapter: Adapter) {
+   async fn handle_adapter_available(&mut self, name: SmolStr, adapter: Adapter) {
       info!("Adapter available: {name}");
 
       if let Some(info) = self.adapters.get_mut(&name) {
@@ -425,7 +440,7 @@ impl ManagerActor {
       }
    }
 
-   async fn handle_adapter_lost(&mut self, name: String) {
+   async fn handle_adapter_lost(&mut self, name: SmolStr) {
       warn!("Adapter lost: {name}");
 
       if let Some(info) = self.adapters.get_mut(&name) {
@@ -466,7 +481,7 @@ impl ManagerActor {
       });
    }
 
-   async fn handle_adapter_error(&mut self, name: String, error: String) {
+   async fn handle_adapter_error(&mut self, name: SmolStr, error: String) {
       error!("Adapter error on {name}: {error}");
 
       if let Some(info) = self.adapters.get_mut(&name) {
@@ -474,7 +489,7 @@ impl ManagerActor {
       }
    }
 
-   async fn handle_device_discovered(&mut self, addr: Address, adapter_name: String) {
+   async fn handle_device_discovered(&mut self, addr: Address, adapter_name: SmolStr) {
       // Check if we already know about this device
       if self.devices.contains_key(&addr) {
          return;

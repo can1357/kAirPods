@@ -18,6 +18,7 @@ use bluer::Address;
 use crossbeam::atomic::AtomicCell;
 use log::{debug, error, info, warn};
 use serde_json::json;
+use smol_str::{SmolStr, ToSmolStr};
 use tokio::{
    sync::{RwLock, oneshot},
    task::{JoinHandle, JoinSet},
@@ -56,8 +57,8 @@ impl Drop for ConnectionState {
 #[derive(Debug, Default)]
 struct AirPodsInner {
    address: Address,
-   address_str: Arc<str>,
-   name: parking_lot::Mutex<Arc<str>>,
+   address_str: SmolStr,
+   name: parking_lot::Mutex<SmolStr>,
    battery: AtomicCell<Option<BatteryInfo>>,
    is_connected: AtomicBool,
    ear_detection: AtomicCell<Option<EarDetectionStatus>>,
@@ -135,7 +136,7 @@ impl AirPods {
       Self(
          AirPodsInner {
             address,
-            address_str: address.to_string().into(),
+            address_str: address.to_smolstr(),
             name: parking_lot::Mutex::new(name.into()),
             ..Default::default()
          }
@@ -149,19 +150,19 @@ impl AirPods {
    }
 
    /// Gets the address string of the Airpod.
-   pub fn address_str(&self) -> &Arc<str> {
+   pub fn address_str(&self) -> &SmolStr {
       &self.0.address_str
    }
 
    /// Gets the name of the Airpod.
-   pub fn name(&self) -> Arc<str> {
+   pub fn name(&self) -> SmolStr {
       self.0.name.lock().clone()
    }
 
    /// Updates the name of the Airpod.
-   pub fn update_name(&self, name: Arc<str>) -> UpdateOp<Arc<str>> {
+   pub fn update_name(&self, name: SmolStr) -> UpdateOp<SmolStr> {
       let mut lock = self.0.name.lock();
-      if lock.as_ref() == name.as_ref() {
+      if lock.as_str() == name.as_str() {
          return UpdateOp::Noop;
       }
       UpdateOp::Updated(mem::replace(&mut *lock, name))
@@ -214,8 +215,8 @@ impl AirPods {
    /// Converts the device state to a JSON representation.
    pub fn to_json(&self) -> serde_json::Value {
       let mut info = json!({
-          "address": self.address_str().as_ref(),
-          "name": self.name().as_ref(),
+          "address": self.address_str().as_str(),
+          "name": self.name().as_str(),
           "connected": self.is_connected(),
       });
 

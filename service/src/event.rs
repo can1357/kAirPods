@@ -6,6 +6,8 @@
 
 use std::sync::Arc;
 
+use smol_str::SmolStr;
+
 use crate::airpods::{
    device::AirPods,
    protocol::{BatteryInfo, EarDetectionStatus, NoiseControlMode},
@@ -20,7 +22,7 @@ pub enum AirPodsEvent {
    BatteryUpdated(BatteryInfo),
    NoiseControlChanged(NoiseControlMode),
    EarDetectionChanged(EarDetectionStatus),
-   DeviceNameChanged(Arc<str>),
+   DeviceNameChanged(SmolStr),
 }
 
 /// Trait for implementing event emission.

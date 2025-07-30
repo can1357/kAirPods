@@ -3,9 +3,10 @@
 //! This module contains functions to parse various packet types received
 //! from AirPods devices over the L2CAP connection.
 
-use std::{str, sync::Arc};
+use std::str;
 
 use log::{debug, warn};
+use smol_str::SmolStr;
 
 use crate::{
    airpods::protocol::{
@@ -180,7 +181,7 @@ pub fn parse_ear_detection(data: &[u8]) -> Result<EarDetectionStatus> {
 
 #[derive(Debug, Default)]
 pub struct Metadata {
-   pub name_candidate: Option<Arc<str>>,
+   pub name_candidate: Option<SmolStr>,
 }
 
 pub fn parse_metadata(data: &[u8]) -> Result<Metadata> {
@@ -200,7 +201,7 @@ pub fn parse_metadata(data: &[u8]) -> Result<Metadata> {
             && text.chars().any(|c| c.is_alphabetic())
             && text.trim().len() > 2
          {
-            name_candidate = Some(Arc::from(text.trim()));
+            name_candidate = Some(text.trim().into());
             break;
          }
       }
