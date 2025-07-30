@@ -1,5 +1,5 @@
 [package]
-name = "kde-airpods-service"
+name = "kairpodsd"
 version = "0.1.2"
 edition = "2024"
 
@@ -7,9 +7,9 @@ authors = ["Can Boluk <me@can.ac>"]
 description = "D-Bus service for AirPods management in KDE Plasma"
 license = "GPL-3.0-or-later"
 
-homepage = "https://github.com/can1357/kde-airpods"
-repository = "https://github.com/can1357/kde-airpods"
-documentation = "https://github.com/can1357/kde-airpods"
+homepage = "https://github.com/can1357/kAirPods"
+repository = "https://github.com/can1357/kAirPods"
+documentation = "https://github.com/can1357/kAirPods"
 readme = "../README.md"
 
 keywords = ["kde", "plasma", "airpods", "bluetooth", "dbus"]
@@ -37,5 +37,5 @@ strum = { version = "0.27", features = ["derive"] }
 
 
 [[bin]]
-name = "kde-airpods-service"
+name = "kairpodsd"
 path = "src/main.rs"

@@ -43,9 +43,9 @@ PlasmoidItem {
     function getDevices() {
 
         var reply = DBus.SessionBus.asyncCall({
-            service: "org.kde.plasma.airpods",
-            path: "/org/kde/plasma/airpods",
-            iface: "org.kde.plasma.airpods",
+            service: "org.kairpods",
+            path: "/org/kairpods/manager",
+            iface: "org.kairpods.manager",
             member: "GetDevices",
             arguments: []
         })
@@ -69,9 +69,9 @@ PlasmoidItem {
 
 
         var reply = DBus.SessionBus.asyncCall({
-            service: "org.kde.plasma.airpods",
-            path: "/org/kde/plasma/airpods",
-            iface: "org.kde.plasma.airpods",
+            service: "org.kairpods",
+            path: "/org/kairpods/manager",
+            iface: "org.kairpods.manager",
             member: "GetDevice",
             arguments: [selectedDevice]
         })
@@ -97,9 +97,9 @@ PlasmoidItem {
         if (!selectedDevice) return
 
         var reply = DBus.SessionBus.asyncCall({
-            service: "org.kde.plasma.airpods",
-            path: "/org/kde/plasma/airpods",
-            iface: "org.kde.plasma.airpods",
+            service: "org.kairpods",
+            path: "/org/kairpods/manager",
+            iface: "org.kairpods.manager",
             member: "SendCommand",
             arguments: [selectedDevice, action, params]
         })
@@ -115,9 +115,9 @@ PlasmoidItem {
     // Connect device
     function connectDevice(address) {
         var reply = DBus.SessionBus.asyncCall({
-            service: "org.kde.plasma.airpods",
-            path: "/org/kde/plasma/airpods",
-            iface: "org.kde.plasma.airpods",
+            service: "org.kairpods",
+            path: "/org/kairpods/manager",
+            iface: "org.kairpods.manager",
             member: "ConnectDevice",
             arguments: [address]
         })
@@ -133,9 +133,9 @@ PlasmoidItem {
     // Disconnect device
     function disconnectDevice(address) {
         var reply = DBus.SessionBus.asyncCall({
-            service: "org.kde.plasma.airpods",
-            path: "/org/kde/plasma/airpods",
-            iface: "org.kde.plasma.airpods",
+            service: "org.kairpods",
+            path: "/org/kairpods/manager",
+            iface: "org.kairpods.manager",
             member: "DisconnectDevice",
             arguments: [address]
         })

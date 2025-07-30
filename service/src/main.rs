@@ -28,7 +28,7 @@ use crate::{airpods::device::AirPods, dbus::AirPodsServiceSignals, error::Result
 async fn main() -> Result<()> {
    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-   info!("Starting AirPods D-Bus service...");
+   info!("Starting kAirPods D-Bus service...");
 
    // Load configuration
    let config = config::Config::load()?;
@@ -48,19 +48,19 @@ async fn main() -> Result<()> {
 
    // Build D-Bus connection
    let connection = connection::Builder::session()?
-      .name("org.kde.plasma.airpods")?
-      .serve_at("/org/kde/plasma/airpods", service)?
+      .name("org.kairpods")?
+      .serve_at("/org/kairpods/manager", service)?
       .build()
       .await?;
 
-   info!("AirPods D-Bus service started at org.kde.plasma.airpods");
+   info!("kAirPods D-Bus service started at org.kairpods");
 
    // Start event processor
    event_bus.spawn_dispatcher(connection).await?;
 
    // Wait for shutdown signal
    signal::ctrl_c().await?;
-   info!("Shutting down AirPods service...");
+   info!("Shutting down kAirPods service...");
 
    Ok(())
 }
@@ -135,7 +135,7 @@ impl EventProcessor {
    async fn spawn_dispatcher(self: Arc<Self>, connection: Connection) -> Result<()> {
       let iface = connection
          .object_server()
-         .interface::<_, AirPodsService>("/org/kde/plasma/airpods")
+         .interface::<_, AirPodsService>("/org/kairpods/manager")
          .await?;
       tokio::spawn(async move {
          while let Some(event) = self.recv().await {

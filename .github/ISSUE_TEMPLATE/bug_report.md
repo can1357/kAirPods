@@ -26,12 +26,12 @@ If applicable, add screenshots to help explain your problem.
  - OS: [e.g. Fedora 39]
  - KDE Plasma Version: [e.g. 6.0.1]
  - AirPods Model: [e.g. AirPods Pro 2]
- - Service Version: [output of `kde-airpods-service --version`]
+ - Service Version: [output of `kairpodsd --version`]
 
 **Logs**
 Please attach relevant logs:
 ```
-journalctl --user -u kde-airpods-service -n 100
+journalctl --user -u kairpodsd -n 100
 ```
 
 **Additional context**

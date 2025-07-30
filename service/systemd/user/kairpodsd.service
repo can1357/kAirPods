@@ -1,11 +1,11 @@
 [Unit]
-Description=KDE AirPods D-Bus Service
+Description=kAirPods D-Bus Service
 After=graphical-session.target
 
 [Service]
 Type=dbus
-BusName=org.kde.plasma.airpods
-ExecStart=/usr/bin/kde-airpods-service
+BusName=org.kairpods
+ExecStart=/usr/bin/kairpodsd
 Restart=on-failure
 RestartSec=5
 PrivateTmp=yes

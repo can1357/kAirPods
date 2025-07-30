@@ -50,14 +50,14 @@ jobs:
       - name: Package plasmoid
         run: |
           mkdir -p "$DESTDIR"
-          cp -r plasmoid "$DESTDIR/org.kde.plasma.airpods"
+          cp -r plasmoid "$DESTDIR/org.kairpods.plasma"
           cd "$DESTDIR"
-          tar -czf kde-airpods-plasmoid.tar.gz org.kde.plasma.airpods
+          tar -czf kairpods-plasmoid.tar.gz org.kairpods.plasma
 
       - uses: actions/upload-artifact@v4
         with:
           name: plasmoid
-          path: artifacts/kde-airpods-plasmoid.tar.gz
+          path: artifacts/kairpods-plasmoid.tar.gz
 
   ###############################################################################
   # 2. Rust background service

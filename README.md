@@ -1,4 +1,4 @@
-# KDE AirPods
+# kAirPods
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![KDE Plasma 6](https://img.shields.io/badge/KDE%20Plasma-6-blue)](https://kde.org/plasma-desktop/)
@@ -6,7 +6,7 @@
 
 Native AirPods integration for KDE Plasma 6 with a modern, fast Rust backend.
 
-![KDE AirPods Screenshot](screenshot.png)
+![kAirPods Screenshot](screenshot.png)
 
 ## Features
 
@@ -19,16 +19,16 @@ Native AirPods integration for KDE Plasma 6 with a modern, fast Rust backend.
 
 ## Architecture
 
-- **Backend**: Rust D-Bus service (`kde-airpods-service`) handling Bluetooth L2CAP communication
+- **Backend**: Rust D-Bus service (`kairpodsd`) handling Bluetooth L2CAP communication
 - **Frontend**: QML Plasmoid with modern UI components
-- **IPC**: D-Bus interface at `org.kde.plasma.airpods`
+- **IPC**: D-Bus interface at `org.kairpods.manager`
 
 ## Quick Start
 
 ```bash
 # Clone the repository
-git clone https://github.com/can1357/kde-airpods.git
-cd kde-airpods
+git clone https://github.com/can1357/kAirPods.git
+cd kairpods
 
 # Build and install
 ./scripts/install.sh
@@ -57,15 +57,15 @@ cd kde-airpods
 
 ```bash
 # List connected devices
-busctl --user call org.kde.plasma.airpods /org/kde/plasma/airpods \
-    org.kde.plasma.airpods GetDevices
+busctl --user call org.kairpods /org/kairpods/manager \
+    org.kairpods.manager GetDevices
 
 # Set noise control to ANC
-busctl --user call org.kde.plasma.airpods /org/kde/plasma/airpods \
-    org.kde.plasma.airpods SendCommand "ss" "AA:BB:CC:DD:EE:FF" "set_noise_mode" 1 "value" "s" "anc"
+busctl --user call org.kairpods /org/kairpods/manager \
+    org.kairpods.manager SendCommand "ss" "AA:BB:CC:DD:EE:FF" "set_noise_mode" 1 "value" "s" "anc"
 
 # Monitor battery updates
-busctl --user monitor org.kde.plasma.airpods
+busctl --user monitor org.kairpods
 ```
 
 ## Requirements

@@ -11,7 +11,7 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-echo -e "${GREEN}KDE AirPods Installation Script${NC}"
+echo -e "${GREEN}kAirPods Installation Script${NC}"
 echo "================================"
 
 # Check prerequisites
@@ -38,6 +38,34 @@ fi
 
 echo -e "${GREEN}✓ All prerequisites met${NC}"
 
+# Check for old installation and remove it
+echo -e "\n${YELLOW}Checking for previous installation...${NC}"
+if [ -f /usr/bin/kde-airpods-service ]; then
+    echo -e "${YELLOW}Found old kde-airpods-service, removing...${NC}"
+    sudo rm -f /usr/bin/kde-airpods-service
+fi
+
+if systemctl --user is-enabled kde-airpods-service &> /dev/null; then
+    echo -e "${YELLOW}Disabling old systemd service...${NC}"
+    systemctl --user stop kde-airpods-service || true
+    systemctl --user disable kde-airpods-service || true
+fi
+
+if [ -f ~/.config/systemd/user/kde-airpods-service.service ]; then
+    echo -e "${YELLOW}Removing old systemd service file...${NC}"
+    rm -f ~/.config/systemd/user/kde-airpods-service.service
+    systemctl --user daemon-reload
+fi
+
+# Remove old plasmoid if exists
+if kpackagetool6 --type Plasma/Applet --list | grep -q "kde-airpods\|kairpods"; then
+    echo -e "${YELLOW}Removing old plasmoid...${NC}"
+    kpackagetool6 --type Plasma/Applet --remove org.kde.plasma.airpods || true
+    kpackagetool6 --type Plasma/Applet --remove org.kairpods.plasma || true
+fi
+
+echo -e "${GREEN}✓ Old installation cleaned up${NC}"
+
 # Build Rust service
 echo -e "\n${YELLOW}Building Rust service...${NC}"
 cd "$PROJECT_ROOT/service"
@@ -46,13 +74,13 @@ echo -e "${GREEN}✓ Service built successfully${NC}"
 
 # Install service binary
 echo -e "\n${YELLOW}Installing service binary...${NC}"
-sudo install -Dm755 target/release/kde-airpods-service /usr/bin/kde-airpods-service
+sudo install -Dm755 target/release/kairpodsd /usr/bin/kairpodsd
 echo -e "${GREEN}✓ Service binary installed${NC}"
 
 # Install systemd user service
 echo -e "\n${YELLOW}Installing systemd service...${NC}"
 mkdir -p ~/.config/systemd/user/
-install -Dm644 systemd/user/kde-airpods-service.service ~/.config/systemd/user/
+install -Dm644 systemd/user/kairpodsd.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 echo -e "${GREEN}✓ Systemd service installed${NC}"
 
@@ -65,22 +93,22 @@ echo -e "${GREEN}✓ Plasma widget installed${NC}"
 
 # Enable and start service
 echo -e "\n${YELLOW}Starting service...${NC}"
-systemctl --user enable kde-airpods-service
-systemctl --user restart kde-airpods-service
+systemctl --user enable kairpodsd
+systemctl --user restart kairpodsd
 
 # Check service status
-if systemctl --user is-active --quiet kde-airpods-service; then
+if systemctl --user is-active --quiet kairpodsd; then
     echo -e "${GREEN}✓ Service is running${NC}"
 else
     echo -e "${RED}⚠ Service failed to start. Check logs with:${NC}"
-    echo "  journalctl --user -u kde-airpods-service -f"
+    echo "  journalctl --user -u kairpodsd -f"
 fi
 
 echo -e "\n${GREEN}Installation complete!${NC}"
 echo -e "\nTo add the widget to your panel:"
 echo "1. Right-click on your Plasma panel"
 echo "2. Select 'Add Widgets'"
-echo "3. Search for 'KDE AirPods'"
+echo "3. Search for 'kAirPods'"
 echo "4. Drag the widget to your panel"
 
 echo -e "\n${YELLOW}Note:${NC} Make sure your AirPods are already paired via KDE Bluetooth settings."

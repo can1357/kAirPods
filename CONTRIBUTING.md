@@ -1,6 +1,6 @@
-# Contributing to KDE AirPods
+# Contributing to kAirPods
 
-Thank you for your interest in contributing to KDE AirPods! This document provides guidelines for contributing to the project.
+Thank you for your interest in contributing to kAirPods! This document provides guidelines for contributing to the project.
 
 ## Getting Started
 
@@ -14,12 +14,14 @@ Thank you for your interest in contributing to KDE AirPods! This document provid
 ## Development Setup
 
 ### Prerequisites
+
 - Rust 1.70+
 - KDE Plasma 6 development packages
 - Qt 6.5+ development tools
 - BlueZ development headers
 
 ### Building
+
 ```bash
 # Build the service
 cd service
@@ -33,12 +35,14 @@ plasmoidviewer -a .
 ## Code Style
 
 ### Rust
+
 - Follow standard Rust formatting (`cargo fmt`)
 - Use `cargo clippy` to catch common issues
 - Write idiomatic Rust code
 - Add documentation comments for public APIs
 
 ### QML
+
 - Follow KDE QML coding style
 - Use consistent indentation (4 spaces)
 - Prefer declarative style over imperative
@@ -54,6 +58,7 @@ plasmoidviewer -a .
 ## Submitting Changes
 
 1. **Commit Messages**
+
    - Use clear, descriptive commit messages
    - Reference issue numbers when applicable
    - Keep commits focused and atomic
@@ -69,7 +74,7 @@ plasmoidviewer -a .
 - Use the GitHub issue tracker
 - Include system information (Plasma version, distro, etc.)
 - Provide steps to reproduce
-- Include relevant logs from `journalctl --user -u kde-airpods-service`
+- Include relevant logs from `journalctl --user -u kairpodsd`
 
 ## Code of Conduct
 

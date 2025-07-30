@@ -7,6 +7,7 @@
 - BlueZ 5.50 or later
 - systemd (for user services)
 - Development packages:
+
   ```bash
   # Debian/Ubuntu
   sudo apt install build-essential pkg-config libdbus-1-dev libbluetooth-dev
@@ -21,12 +22,14 @@
 ## Building from Source
 
 1. **Clone the repository**
+
    ```bash
-   git clone https://github.com/can1357/kde-airpods.git
-   cd kde-airpods
+   git clone https://github.com/can1357/kAirPods.git
+   cd kairpods
    ```
 
 2. **Build the Rust service**
+
    ```bash
    cd service
    cargo build --release
@@ -34,13 +37,14 @@
    ```
 
 3. **Install components**
+
    ```bash
    # Install the service binary
-   sudo install -Dm755 service/target/release/kde-airpods-service /usr/bin/kde-airpods-service
+   sudo install -Dm755 service/target/release/kairpodsd /usr/bin/kairpodsd
 
    # Install systemd user service
-   install -Dm644 service/systemd/user/kde-airpods-service.service \
-     ~/.config/systemd/user/kde-airpods-service.service
+   install -Dm644 service/systemd/user/kairpodsd.service \
+     ~/.config/systemd/user/kairpodsd.service
 
    # Install the plasmoid
    kpackagetool6 --type Plasma/Applet --install plasmoid
@@ -49,7 +53,7 @@
 4. **Enable and start the service**
    ```bash
    systemctl --user daemon-reload
-   systemctl --user enable --now kde-airpods-service
+   systemctl --user enable --now kairpodsd
    ```
 
 ## Quick Install Script
@@ -65,34 +69,39 @@ This will build and install all components automatically.
 ## Verifying Installation
 
 1. **Check service status**
+
    ```bash
-   systemctl --user status kde-airpods-service
+   systemctl --user status kairpodsd
    ```
 
 2. **Test D-Bus interface**
+
    ```bash
-   busctl --user introspect org.kde.plasma.airpods /org/kde/plasma/airpods
+   busctl --user introspect org.kairpods /org/kairpods/manager
    ```
 
 3. **Add widget to panel**
    - Right-click on your Plasma panel
    - Select "Add Widgets"
-   - Search for "KDE AirPods"
+   - Search for "kAirPods"
    - Drag to panel
 
 ## Troubleshooting
 
 ### Service fails to start
-- Check logs: `journalctl --user -u kde-airpods-service -f`
+
+- Check logs: `journalctl --user -u kairpodsd -f`
 - Ensure your user is in the `bluetooth` group: `sudo usermod -aG bluetooth $USER`
 - Logout and login again for group changes to take effect
 
 ### AirPods not detected
+
 - Ensure AirPods are paired via KDE Bluetooth settings first
 - Check Bluetooth is enabled: `bluetoothctl power on`
 - Verify L2CAP support: `lsmod | grep bluetooth`
 
 ### Permission issues
+
 - The service needs access to Bluetooth and D-Bus
 - SELinux/AppArmor may need configuration on some distributions
 
@@ -100,13 +109,13 @@ This will build and install all components automatically.
 
 ```bash
 # Stop and disable service
-systemctl --user stop kde-airpods-service
-systemctl --user disable kde-airpods-service
+systemctl --user stop kairpodsd
+systemctl --user disable kairpodsd
 
 # Remove files
-sudo rm /usr/bin/kde-airpods-service
-rm ~/.config/systemd/user/kde-airpods-service.service
+sudo rm /usr/bin/kairpodsd
+rm ~/.config/systemd/user/kairpodsd.service
 
 # Remove plasmoid
-kpackagetool6 --type Plasma/Applet --remove org.kde.plasma.airpods
+kpackagetool6 --type Plasma/Applet --remove org.kairpods.plasma
 ```

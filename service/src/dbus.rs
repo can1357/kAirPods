@@ -23,7 +23,7 @@ fn to_arg_error<T: fmt::Display>(e: T) -> zbus::fdo::Error {
    zbus::fdo::Error::InvalidArgs(e.to_string())
 }
 
-#[interface(name = "org.kde.plasma.airpods")]
+#[interface(name = "org.kairpods.manager")]
 impl AirPodsService {
    async fn get_devices(&self) -> zbus::fdo::Result<String> {
       let states: Vec<serde_json::Value> = self
