@@ -90,12 +90,12 @@ pub enum BatteryStatus {
 pub enum NoiseControlMode {
    #[strum(serialize = "off")]
    Off = 0x01,
-   #[strum(serialize = "nc")]
-   NC = 0x02,
-   #[strum(serialize = "trans", serialize = "transparency")]
-   Trans = 0x03,
-   #[strum(serialize = "adapt", serialize = "adaptive")]
-   Adapt = 0x04,
+   #[strum(serialize = "anc")]
+   Active = 0x02,
+   #[strum(serialize = "transparency")]
+   Transparency = 0x03,
+   #[strum(serialize = "adaptive")]
+   Adaptive = 0x04,
 }
 
 impl NoiseControlMode {

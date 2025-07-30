@@ -208,6 +208,7 @@ async fn recv_thread(
          warn!("Failed to send data: {e:?}");
          return;
       }
+      stack[..n].fill(0);
    }
 }
 
