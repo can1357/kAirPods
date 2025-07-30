@@ -7,7 +7,8 @@ use std::{fmt, num::NonZeroU8, sync::LazyLock};
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use smallvec::SmallVec;
+
+use crate::bluetooth::l2cap::Packet;
 
 pub const PKT_HANDSHAKE: &[u8] = &[
    0x00, 0x00, 0x04, 0x00, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -29,8 +30,6 @@ pub const HDR_ACK_HANDSHAKE: &[u8] = b"\x01\x00\x04\x00";
 pub const HDR_ACK_FEATURES: &[u8] = b"\x04\x00\x04\x00\x2b";
 pub const HDR_METADATA: &[u8] = b"\x04\x00\x04\x00\x1d";
 pub const HDR_EAR_DETECTION: &[u8] = b"\x04\x00\x04\x00\x06\x00";
-
-pub type PacketVec = SmallVec<[u8; 32]>;
 
 /// Represents different components of `AirPods`.
 #[repr(u8)]
@@ -294,7 +293,7 @@ impl EarDetectionStatus {
 }
 
 /// Builds a control packet for sending commands to `AirPods`.
-pub fn build_control_packet(cmd: u8, data: [u8; 4]) -> PacketVec {
+pub fn build_control_packet(cmd: u8, data: [u8; 4]) -> Packet {
    HDR_CMD_CTL
       .iter()
       .copied()
@@ -305,14 +304,14 @@ pub fn build_control_packet(cmd: u8, data: [u8; 4]) -> PacketVec {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
-pub enum FeatureOp {
+pub enum FeatureCmd {
    Query = 0,
    Enable = 1,
    Disable = 2,
 }
 
-impl FeatureOp {
-   pub fn build(self, feature: u8) -> PacketVec {
+impl FeatureCmd {
+   pub fn build(self, feature: u8) -> Packet {
       let data = self as u32;
       build_control_packet(feature, data.to_le_bytes())
    }

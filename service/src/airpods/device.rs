@@ -15,7 +15,6 @@ use std::{
 };
 
 use bluer::Address;
-use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
 use log::{debug, error, info, warn};
 use serde_json::json;
@@ -29,16 +28,13 @@ use crate::{
    airpods::{
       parser,
       protocol::{
-         BatteryInfo, EarDetectionStatus, FeatureId, FeatureOp, HDR_ACK_FEATURES,
+         BatteryInfo, EarDetectionStatus, FeatureCmd, FeatureId, HDR_ACK_FEATURES,
          HDR_ACK_HANDSHAKE, HDR_BATTERY_STATE, HDR_EAR_DETECTION, HDR_METADATA, HDR_NOISE_CTL,
          NoiseControlMode, PKT_HANDSHAKE, PKT_REQUEST_NOTIFY, PKT_SET_FEATURES,
          build_control_packet,
       },
    },
-   bluetooth::{
-      l2cap,
-      l2cap::{L2CapReceiver, L2CapSender},
-   },
+   bluetooth::l2cap::{self, L2CapReceiver, L2CapSender, Packet},
    error::{AirPodsError, Result},
    event::{AirPodsEvent, EventSender},
 };
@@ -256,9 +252,9 @@ impl AirPods {
    pub fn features(&self) -> Vec<(FeatureId, bool)> {
       let mut features = Vec::new();
       for i in 0..=0xff {
-         let cmd = FeatureId::from_id(i);
-         if self.seen_feature(cmd) {
-            features.push((cmd, self.feature_enabled(cmd)));
+         let feat = FeatureId::from_id(i);
+         if self.seen_feature(feat) {
+            features.push((feat, self.feature_enabled(feat)));
          }
       }
       features
@@ -319,31 +315,23 @@ impl AirPods {
       &self,
       jset: &mut JoinSet<()>,
    ) -> Result<(L2CapReceiver, L2CapSender)> {
-      let mut hooks = l2cap::Hooks::new();
-
       let (hs_ack_tx, mut hs_ack_rx) = oneshot::channel();
       let (feat_ack_tx, mut feat_ack_rx) = oneshot::channel();
 
-      async fn wait_for_ack(tx: &mut oneshot::Receiver<Bytes>) -> Result<Bytes> {
+      async fn wait_for_ack<T>(tx: &mut oneshot::Receiver<T>) -> Result<T> {
          time::timeout(Duration::from_secs(5), tx)
             .await
             .map_err(|_| AirPodsError::RequestTimeout)?
             .map_err(|_| AirPodsError::ConnectionClosed)
       }
 
-      hooks
-         .add(
-            l2cap::Hook::once(|bytes| {
-               let _ = hs_ack_tx.send(bytes.clone());
-            })
-            .prefix(HDR_ACK_HANDSHAKE),
-         )
-         .add(
-            l2cap::Hook::once(|bytes| {
-               let _ = feat_ack_tx.send(bytes.clone());
-            })
-            .prefix(HDR_ACK_FEATURES),
-         );
+      let hooks = l2cap::Hooks::new()
+         .prefix_once(HDR_ACK_HANDSHAKE, |_| {
+            let _ = hs_ack_tx.send(());
+         })
+         .prefix_once(HDR_ACK_FEATURES, |_| {
+            let _ = feat_ack_tx.send(());
+         });
 
       let (receiver, sender) = l2cap::connect(jset, hooks, self.address(), None).await?;
       info!("Starting handshake sequence...");
@@ -465,28 +453,25 @@ impl AirPods {
    }
 
    pub async fn set_feature(&self, feature: &str, enabled: bool) -> Result<()> {
-      let cmd = match FeatureId::from_str(feature) {
-         Some(cmd) => cmd,
-         None => return Err(AirPodsError::FeatureNotSupported(feature.into())),
-      };
+      let feat = FeatureId::from_str(feature)
+         .ok_or_else(|| AirPodsError::FeatureNotSupported(feature.into()))?;
 
       let conn = self.0.conn.read().await;
       if let Some(conn) = conn.as_ref() {
-         let op = if enabled {
-            FeatureOp::Enable
+         let packet = if enabled {
+            FeatureCmd::Enable.build(feat.id())
          } else {
-            FeatureOp::Disable
+            FeatureCmd::Disable.build(feat.id())
          };
-         let packet = op.build(cmd.id());
          conn.sender.send(&packet).await?;
-         self.set_feature_enabled(cmd, enabled);
+         self.set_feature_enabled(feat, enabled);
          Ok(())
       } else {
          Err(AirPodsError::DeviceNotConnected)
       }
    }
 
-   async fn process_packet(&self, address: Address, packet: Bytes, event_tx: &EventSender) {
+   async fn process_packet(&self, address: Address, packet: Packet, event_tx: &EventSender) {
       // Battery status
       if packet.starts_with(HDR_BATTERY_STATE) {
          match parser::parse_battery_status(&packet) {
@@ -551,10 +536,10 @@ impl AirPods {
          debug!("Received handshake ACK from {address}");
       } else if packet.starts_with(HDR_ACK_FEATURES) {
          debug!("Received features ACK from {address}");
-      } else if let Some((cmd, op)) = FeatureOp::parse(&packet) {
+      } else if let Some((cmd, op)) = FeatureCmd::parse(&packet) {
          debug!("Received feature command from {address}: {cmd} {op:?}");
-         if matches!(op, FeatureOp::Enable | FeatureOp::Disable) {
-            self.set_feature_enabled(cmd, matches!(op, FeatureOp::Enable));
+         if matches!(op, FeatureCmd::Enable | FeatureCmd::Disable) {
+            self.set_feature_enabled(cmd, matches!(op, FeatureCmd::Enable));
          }
       } else {
          let data = if packet.len() < 16 {

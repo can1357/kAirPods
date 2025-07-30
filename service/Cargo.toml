@@ -30,7 +30,6 @@ toml = "0.9"
 crossbeam = { version = "0.8", features = ["std"] }
 parking_lot = "0.12"
 heapless = "0.8"
-bytes = "1.10"
 smallvec = "1.10"
 
 [[bin]]

@@ -9,8 +9,8 @@ use bluer::{
    Address, AddressType,
    l2cap::{SeqPacket, Socket, SocketAddr},
 };
-use bytes::Bytes;
 use log::{debug, warn};
+use smallvec::SmallVec;
 use tokio::{
    sync::{mpsc, oneshot},
    task::JoinSet,
@@ -18,6 +18,8 @@ use tokio::{
 };
 
 use crate::error::{AirPodsError, Result};
+
+pub type Packet = SmallVec<[u8; 32]>;
 
 /// PSM (Protocol Service Multiplexer) for AirPods control channel
 const PSM_CONTROL: u16 = 0x1001;
@@ -30,7 +32,7 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 enum Command {
    Send {
-      data: Bytes,
+      data: Packet,
       then: oneshot::Sender<Result<()>>,
    },
 }
@@ -40,11 +42,11 @@ enum Command {
 /// Provides async packet reception from the AirPods device.
 #[derive(Debug)]
 pub struct L2CapReceiver {
-   rx: mpsc::Receiver<Result<Bytes>>,
+   rx: mpsc::Receiver<Result<Packet>>,
 }
 
 impl L2CapReceiver {
-   pub async fn recv(&mut self) -> Result<Bytes> {
+   pub async fn recv(&mut self) -> Result<Packet> {
       self.rx.recv().await.ok_or(AirPodsError::ConnectionClosed)?
    }
 }
@@ -72,7 +74,7 @@ impl L2CapSender {
       self
          .tx
          .send(Command::Send {
-            data: Bytes::copy_from_slice(data),
+            data: Packet::from_slice(data),
             then: tx,
          })
          .await
@@ -100,26 +102,37 @@ impl Hooks {
       Self { hooks: Vec::new() }
    }
 
-   pub fn add(&mut self, hook: Hook) -> &mut Self {
+   pub fn install(mut self, hook: Hook) -> Self {
       self.hooks.push(hook);
       self
    }
+   pub fn prefix_once<F>(self, pfx: &[u8], cb: F) -> Self
+   where
+      F: FnOnce(&[u8]) + Send + 'static,
+   {
+      self.install(Hook::once(cb).prefix(pfx))
+   }
 
-   pub fn passthrough(&mut self, bytes: &Bytes) {
+   pub fn passthrough(&mut self, bytes: &Packet) {
       self
          .hooks
          .retain_mut(|hook| matches!(hook.passthrough(bytes), HookDisposition::Retain));
    }
 }
 
+pub type Callback = Box<dyn FnMut(&[u8]) + Send>;
+
 pub struct Hook {
    pfx: heapless::Vec<u8, 8>,
-   cb: Box<dyn FnMut(&Bytes) + Send + Sync + 'static>,
+   cb: Callback,
    disposition: HookDisposition,
 }
 
 impl Hook {
-   pub fn once(cb: impl FnOnce(&Bytes) + Send + Sync + 'static) -> Self {
+   pub fn once<F>(cb: F) -> Self
+   where
+      F: FnOnce(&[u8]) + Send + 'static,
+   {
       let mut cb = Some(cb);
       Self {
          pfx: Default::default(),
@@ -137,7 +150,7 @@ impl Hook {
       self
    }
 
-   pub fn passthrough(&mut self, bytes: &Bytes) -> HookDisposition {
+   pub fn passthrough(&mut self, bytes: &[u8]) -> HookDisposition {
       if bytes.starts_with(&self.pfx) {
          (self.cb)(bytes);
          self.disposition
@@ -176,7 +189,7 @@ pub async fn connect(
 
 async fn recv_thread(
    adr: Address,
-   tx: mpsc::Sender<Result<Bytes>>,
+   tx: mpsc::Sender<Result<Packet>>,
    sp: Arc<SeqPacket>,
    mut hooks: Hooks,
 ) {
@@ -189,7 +202,7 @@ async fn recv_thread(
       }
       let recvd = &stack[..n];
       debug!("← {adr}: {}", hex::encode(recvd));
-      let bytes = Bytes::copy_from_slice(recvd);
+      let bytes = Packet::from_slice(recvd);
       hooks.passthrough(&bytes);
       if let Err(e) = tx.send(Ok(bytes)).await {
          warn!("Failed to send data: {e:?}");
