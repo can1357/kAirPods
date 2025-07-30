@@ -16,7 +16,7 @@ keywords = ["kde", "plasma", "airpods", "bluetooth", "dbus"]
 categories = ["hardware-support", "desktop", "os::linux-apis"]
 
 [dependencies]
-tokio = { version = "1.35", features = ["full"] }
+tokio = { version = "1.47", features = ["full"] }
 zbus = { version = "5.9", features = ["tokio"] }
 bluer = { version = "0.17", features = ["l2cap", "bluetoothd"] }
 serde = { version = "1.0", features = ["derive"] }
