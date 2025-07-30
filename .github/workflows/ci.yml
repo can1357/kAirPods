@@ -13,46 +13,44 @@ env:
   CARGO_TERM_COLOR: always
 
 ###############################################################################
-# Job 1 – Build + test the Plasma 6 widget
+# 1. Plasma‑6 widget
 ###############################################################################
 jobs:
   widget:
     name: Plasma Widget
-    runs-on: ubuntu-latest # the host runner
-    container: # …but everything below runs **inside** Debian sid
-      image: debian:sid
+    runs-on: ubuntu-latest
+    container:
+      image: debian:sid # KF6 & Qt 6 are already here
     env:
       DEBIAN_FRONTEND: noninteractive
-      # Install prefix so we can “stage” the widget in artifacts/
       DESTDIR: ${{ github.workspace }}/artifacts
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install build dependencies (KF6 + Qt 6)
+      - name: Install KF6 + Qt 6 headers
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
             build-essential ninja-build cmake git gettext \
             extra-cmake-modules \
-            qt6-base-dev qt6-declarative-dev qt6-qmltooling-dev qt6-tools-dev-tools \
-            libplasma-dev libkf6config-dev libkf6i18n-dev \
+            qt6-base-dev qt6-declarative-dev qt6-tools-dev-tools \
+            libplasma-dev \
+            libkf6config-dev libkf6i18n-dev \
             libkf6notifications-dev libkf6windowsystem-dev
 
-      - name: Configure CMake
-        run: |
-          cmake -S plasmoid -B build -GNinja \
-                -DCMAKE_INSTALL_PREFIX=/usr \
-                -DCMAKE_BUILD_TYPE=Release
+      - name: Configure
+        run: cmake -S plasmoid -B build -GNinja \
+          -DCMAKE_INSTALL_PREFIX=/usr \
+          -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build widget
+      - name: Build
         run: cmake --build build --parallel
 
-      # (Optional) run any unit tests you have
-      - name: Run tests
+      - name: (Optional) unit tests
         run: ctest --test-dir build --output-on-failure || true
 
-      - name: Stage install into artifacts/
-        run: cmake --install build --prefix "${DESTDIR}"
+      - name: Stage install
+        run: cmake --install build --prefix "$DESTDIR"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -60,7 +58,7 @@ jobs:
           path: artifacts
 
   ###############################################################################
-  # Job 2 – Build/format/test the Rust background service
+  # 2. Rust background service
   ###############################################################################
   rust:
     name: Rust Service
@@ -73,44 +71,45 @@ jobs:
         with:
           components: clippy, rustfmt
 
-      - name: Cache cargo registry + build
+      - name: Cache Cargo
         uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+            service/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('service/Cargo.lock') }}
 
-      - name: Check formatting
+      - name: rustfmt
+        working-directory: service
         run: cargo fmt --all -- --check
 
-      - name: Clippy (deny warnings)
+      - name: clippy
+        working-directory: service
         run: cargo clippy -- -D warnings
 
-      - name: Test
+      - name: tests
+        working-directory: service
         run: cargo test --verbose
 
-      - name: Build (release)
+      - name: build (release)
+        working-directory: service
         run: cargo build --release --verbose
 
   ###############################################################################
-  # Job 3 – Static project‑structure sanity checks
+  # 3. Static validation of project layout
   ###############################################################################
   validate:
     name: Validate Plasmoid Layout
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Validate file presence & permissions
+      - name: Check required files & perms
         run: |
           set -euo pipefail
           test -f plasmoid/metadata.json
           test -f plasmoid/contents/ui/main.qml
           jq . plasmoid/metadata.json >/dev/null
-
-          # script executability
           for f in scripts/install.sh scripts/uninstall.sh; do
             [ -x "$f" ] || { echo "$f must be +x"; exit 1; }
           done

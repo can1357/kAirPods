@@ -72,7 +72,7 @@ struct AirPodsInner {
 }
 
 /// Represents a connected AirPods device.
-/// 
+///
 /// This type is cheaply cloneable and thread-safe.
 #[derive(Clone)]
 pub struct AirPods(Arc<AirPodsInner>);
@@ -118,14 +118,12 @@ impl<T: PartialEq + Clone> UpdateOp<T> {
    }
 
    fn new(prev: Option<T>, new: Option<T>) -> Self {
-      if prev == new {
-         Self::Noop
-      } else if prev.is_none() {
-         Self::Inserted
-      } else if new.is_none() {
-         Self::Deleted(prev.unwrap())
-      } else {
-         Self::Updated(new.unwrap())
+      match (prev, new) {
+         (Some(p), Some(n)) if p == n => Self::Noop,
+         (None, Some(_)) => Self::Inserted,
+         (Some(p), None) => Self::Deleted(p),
+         (Some(_), Some(n)) => Self::Updated(n),
+         (None, None) => Self::Noop,
       }
    }
 
@@ -283,7 +281,7 @@ impl AirPods {
    }
 
    /// Establishes an L2CAP connection to the AirPods device.
-   /// 
+   ///
    /// Returns a join handle that resolves when the connection is closed.
    pub async fn connect(&self, event_tx: &EventSender) -> Result<JoinHandle<Option<AirPodsError>>> {
       info!("Connecting to AirPods at {}", self.address());

@@ -12,7 +12,6 @@ use bluer::{
 use bytes::Bytes;
 use log::{debug, warn};
 use tokio::{
-   io::AsyncReadExt,
    sync::{mpsc, oneshot},
    task::JoinSet,
    time,
@@ -37,7 +36,7 @@ enum Command {
 }
 
 /// Receiver half of an L2CAP connection.
-/// 
+///
 /// Provides async packet reception from the AirPods device.
 #[derive(Debug)]
 pub struct L2CapReceiver {
@@ -45,17 +44,13 @@ pub struct L2CapReceiver {
 }
 
 impl L2CapReceiver {
-   pub fn is_connected(&self) -> bool {
-      !self.rx.is_closed()
-   }
-
    pub async fn recv(&mut self) -> Result<Bytes> {
       self.rx.recv().await.ok_or(AirPodsError::ConnectionClosed)?
    }
 }
 
 /// Sender half of an L2CAP connection.
-/// 
+///
 /// Provides async packet transmission to the AirPods device.
 /// This type is cheaply cloneable.
 #[derive(Debug, Clone)]
@@ -124,14 +119,6 @@ pub struct Hook {
 }
 
 impl Hook {
-   pub fn new(cb: impl FnMut(&Bytes) + Send + Sync + 'static) -> Self {
-      Self {
-         pfx: Default::default(),
-         cb: Box::new(cb),
-         disposition: HookDisposition::Retain,
-      }
-   }
-
    pub fn once(cb: impl FnOnce(&Bytes) + Send + Sync + 'static) -> Self {
       let mut cb = Some(cb);
       Self {
@@ -197,7 +184,7 @@ async fn recv_thread(
    while let Ok(n) = sp.recv(&mut stack).await {
       if n == 0 {
          warn!("Connection lost");
-         let _ = tx.send(Err(AirPodsError::ConnectionLost));
+         let _ = tx.send(Err(AirPodsError::ConnectionLost)).await;
          return;
       }
       let recvd = &stack[..n];

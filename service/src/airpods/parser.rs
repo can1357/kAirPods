@@ -16,7 +16,7 @@ use crate::{
 };
 
 /// Parses a battery status packet from AirPods.
-/// 
+///
 /// The packet format contains battery information for up to 3 components
 /// (left, right, case).
 pub fn parse_battery_status(data: &[u8]) -> Result<BatteryInfo> {

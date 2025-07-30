@@ -94,7 +94,7 @@ enum ManagerCommand {
 // === Main Manager ===
 
 /// Main Bluetooth manager that handles device discovery and connections.
-/// 
+///
 /// This type provides a high-level interface for managing AirPods devices
 /// across all available Bluetooth adapters.
 pub struct BluetoothManager {
