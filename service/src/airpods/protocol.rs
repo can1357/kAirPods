@@ -83,7 +83,7 @@ pub enum NoiseControlMode {
 }
 
 impl NoiseControlMode {
-   pub const fn from_str(s: &str) -> Option<Self> {
+   pub fn from_str(s: &str) -> Option<Self> {
       if s.eq_ignore_ascii_case("off") {
          return Some(Self::Off);
       } else if s.eq_ignore_ascii_case("nc") {
