@@ -5,13 +5,14 @@
 
 use core::fmt;
 use std::{
+   borrow::Borrow,
    collections::HashMap,
    mem,
    sync::{
       Arc, Weak,
       atomic::{AtomicBool, AtomicU64, Ordering},
    },
-   time::Duration,
+   time::{Duration, Instant},
 };
 
 use bluer::Address;
@@ -53,6 +54,114 @@ impl Drop for ConnectionState {
    }
 }
 
+/// Ring buffer for tracking battery history.
+const BATTERY_HISTORY_SIZE: usize = 32;
+
+#[derive(Debug, Clone, Copy)]
+struct BatteryHistory {
+   base_time: Instant,
+   timestamps: [u32; BATTERY_HISTORY_SIZE], // ms since base_time
+   levels: [u8; BATTERY_HISTORY_SIZE],
+   head: usize,
+   count: usize,
+}
+
+impl Default for BatteryHistory {
+   fn default() -> Self {
+      let now = Instant::now();
+      Self {
+         base_time: now,
+         timestamps: [0; BATTERY_HISTORY_SIZE],
+         levels: [0; BATTERY_HISTORY_SIZE],
+         head: 0,
+         count: 0,
+      }
+   }
+}
+
+impl BatteryHistory {
+   fn push(&mut self, timestamp: Instant, level: u8) {
+      self.timestamps[self.head] = timestamp
+         .saturating_duration_since(self.base_time)
+         .as_millis()
+         .try_into()
+         .unwrap_or(u32::MAX);
+      self.levels[self.head] = level;
+      self.head = (self.head + 1) % BATTERY_HISTORY_SIZE;
+      self.count = self.count.saturating_add(1).min(BATTERY_HISTORY_SIZE);
+   }
+
+   fn iter(&self) -> impl ExactSizeIterator<Item = (Instant, u8)> + Clone + '_ {
+      // Start from oldest entry
+      let start = if self.count < BATTERY_HISTORY_SIZE {
+         0
+      } else {
+         self.head
+      };
+
+      (0..self.count).map(move |i| {
+         let idx = (start + i) % BATTERY_HISTORY_SIZE;
+         let timestamp = self.base_time + Duration::from_millis(self.timestamps[idx] as u64);
+         (timestamp, self.levels[idx])
+      })
+   }
+
+   fn last_level(&self) -> Option<u8> {
+      if self.count == 0 {
+         return None;
+      }
+      let last_idx = if self.head == 0 {
+         BATTERY_HISTORY_SIZE - 1
+      } else {
+         self.head - 1
+      };
+      Some(self.levels[last_idx])
+   }
+
+   fn clear(&mut self) {
+      self.base_time = Instant::now();
+      self.timestamps.fill(0);
+      self.levels.fill(0);
+      self.head = 0;
+      self.count = 0;
+   }
+
+   fn record_battery_drop(&mut self, level: u8, timestamp: Instant) {
+      // Not charging, record battery level
+      if let Some(last_level) = self.last_level() {
+         if level < last_level {
+            debug!("Battery dropped from {last_level} to {level}");
+            self.push(timestamp, level);
+         }
+      } else {
+         // First recording
+         self.push(timestamp, level);
+      }
+   }
+
+   fn calculate_drain_rate_and_alpha(
+      &self,
+      min_samples: usize,
+      max_age: Option<Instant>,
+   ) -> Option<(f64, f64)> {
+      if self.count < min_samples {
+         None
+      } else {
+         let samples: heapless::Vec<_, BATTERY_HISTORY_SIZE> = self
+            .iter()
+            .filter(|(timestamp, _)| max_age.is_none_or(|s| *timestamp >= s))
+            .collect();
+         if samples.len() < min_samples {
+            None
+         } else {
+            let rate = calculate_slope(&samples)?;
+            let alpha = if samples.len() >= 10 { 0.3 } else { 0.1 };
+            Some((rate, alpha))
+         }
+      }
+   }
+}
+
 /// Internal shared state for an `AirPods` device.
 #[derive(Debug, Default)]
 struct AirPodsInner {
@@ -66,6 +175,8 @@ struct AirPodsInner {
    features: [AtomicU64; 256 / 64],
    features_seen: [AtomicU64; 256 / 64],
    conn: RwLock<Option<ConnectionState>>,
+   battery_history: parking_lot::Mutex<[BatteryHistory; 2]>, // (left, right)
+   last_ttl_estimate: AtomicCell<Option<u32>>,
 }
 
 /// Represents a connected `AirPods` device.
@@ -133,15 +244,12 @@ impl<T: PartialEq> UpdateOp<T> {
 impl AirPods {
    /// Creates a new `AirPods` device instance.
    pub fn new(address: Address, name: String) -> Self {
-      Self(
-         AirPodsInner {
-            address,
-            address_str: address.to_smolstr(),
-            name: parking_lot::Mutex::new(name.into()),
-            ..Default::default()
-         }
-         .into(),
-      )
+      Self(Arc::new(AirPodsInner {
+         address,
+         address_str: address.to_smolstr(),
+         name: parking_lot::Mutex::new(name.into()),
+         ..Default::default()
+      }))
    }
 
    /// Gets the address of the Airpod.
@@ -223,6 +331,12 @@ impl AirPods {
       if let Some(battery) = self.battery_info() {
          info["battery"] = battery.to_json();
       }
+
+      // Add battery TTL estimate
+      info["battery_ttl_estimate"] = match self.estimate_battery_ttl() {
+         Some(minutes) => json!(minutes),
+         None => json!(null),
+      };
 
       if let Some(mode) = self.noise_mode() {
          info["noise_mode"] = json!(mode.to_str());
@@ -480,6 +594,14 @@ impl AirPods {
                   address, battery.left.level, battery.right.level, battery.case.level
                );
 
+               // Record battery drops for TTL estimation
+               self.record_battery_drop(
+                  battery.left.level,
+                  battery.right.level,
+                  battery.left.is_charging(),
+                  battery.right.is_charging(),
+               );
+
                // Send event if battery changed
                if self.update_battery_info(battery).is_updated() {
                   event_tx.emit(self, AirPodsEvent::BatteryUpdated(battery));
@@ -558,5 +680,382 @@ impl AirPods {
             data
          );
       }
+   }
+
+   /// Records a battery drop for the specified component if the level decreased.
+   /// Clears history when charging starts to avoid using stale drain rates.
+   fn record_battery_drop(
+      &self,
+      left_level: u8,
+      right_level: u8,
+      left_charging: bool,
+      right_charging: bool,
+   ) {
+      let now = Instant::now();
+
+      let mut history = self.0.battery_history.lock();
+      let [left, right] = &mut *history;
+      let sides = [
+         ("left", left_level, left_charging, left),
+         ("right", right_level, right_charging, right),
+      ];
+      for (name, level, charging, history) in sides {
+         if charging && history.last_level().is_some() {
+            debug!("{name} bud started charging, clearing battery history");
+            history.clear();
+         } else if !charging {
+            history.record_battery_drop(level, now);
+         }
+      }
+   }
+
+   /// Calculates the battery drain rate using linear regression for better accuracy.
+   fn calculate_drain_rate_and_alpha(&self) -> Option<(f64, f64)> {
+      const MIN_SAMPLES: usize = 4;
+      const MAX_AGE_SECS: u64 = 2 * 60 * 60; // 2 hours
+
+      let now = Instant::now();
+
+      // Calculate drain rate for left bud
+      let max_age = now.checked_sub(Duration::from_secs(MAX_AGE_SECS));
+      let [left, right] = { *self.0.battery_history.lock() };
+
+      let left = left.calculate_drain_rate_and_alpha(MIN_SAMPLES, max_age);
+      let right = right.calculate_drain_rate_and_alpha(MIN_SAMPLES, max_age);
+
+      // Return the maximum drain rate (most conservative estimate)
+      match (left, right) {
+         (Some((l, la)), Some((r, ra))) => Some((l.max(r), f64::min(la, ra))),
+         (Some((l, la)), None) => Some((l, la)),
+         (None, Some((r, ra))) => Some((r, ra)),
+         (None, None) => None,
+      }
+   }
+
+   /// Estimates battery time-to-live in minutes based on current levels and drain rate.
+   pub fn estimate_battery_ttl(&self) -> Option<u32> {
+      let battery = self.battery_info()?;
+      let prev_estimate = self.0.last_ttl_estimate.load();
+
+      // Don't estimate if either bud is charging
+      if battery.left.is_charging() || battery.right.is_charging() {
+         if prev_estimate.is_some() {
+            debug!("Battery TTL estimation unavailable: AirPods are charging");
+            self.0.last_ttl_estimate.store(None);
+         }
+         return None;
+      }
+
+      // Don't estimate if either bud is disconnected
+      if !battery.left.is_available() || !battery.right.is_available() {
+         if prev_estimate.is_some() {
+            debug!("Battery TTL estimation unavailable: One or both buds disconnected");
+            self.0.last_ttl_estimate.store(None);
+         }
+         return None;
+      }
+
+      let (drain_rate, alpha) = match self.calculate_drain_rate_and_alpha() {
+         Some((rate, alpha)) => (rate, alpha),
+         None => {
+            if prev_estimate.is_some() {
+               self.0.last_ttl_estimate.store(None);
+            }
+            return None;
+         },
+      };
+
+      // Use the minimum battery level for conservative estimate
+      let min_level = battery.left.level.min(battery.right.level) as f64;
+
+      // Calculate hours remaining
+      let hours_remaining = min_level / drain_rate;
+
+      // Convert to minutes
+      let new_minutes = (hours_remaining * 60.0) as u32;
+
+      if new_minutes > 0 && new_minutes < 24 * 60 {
+         // Apply hysteresis to avoid jumpy estimates
+         let smoothed_minutes = if let Some(last_estimate) = prev_estimate {
+            let smoothed = (new_minutes as f64) * alpha + (last_estimate as f64) * (1.0 - alpha);
+            smoothed.round() as u32
+         } else {
+            info!("Battery TTL estimation now available: {new_minutes} minutes remaining");
+            new_minutes
+         };
+
+         // Cache the smoothed estimate
+         self.0.last_ttl_estimate.store(Some(smoothed_minutes));
+         Some(smoothed_minutes)
+      } else {
+         if prev_estimate.is_some() {
+            debug!(
+               "Battery TTL estimation unavailable: Unreasonable estimate ({new_minutes} minutes)"
+            );
+            self.0.last_ttl_estimate.store(None);
+         }
+         None
+      }
+   }
+}
+
+// Helper function to calculate linear regression slope
+fn calculate_slope<I>(samples: I) -> Option<f64>
+where
+   I: IntoIterator<Item: Borrow<(Instant, u8)>>,
+   I::IntoIter: ExactSizeIterator,
+{
+   let samples = samples.into_iter();
+   let len = samples.len();
+   if len < 2 {
+      return None;
+   }
+
+   let n = len as f64;
+   let mut sum_x = 0.0;
+   let mut sum_y = 0.0;
+   let mut sum_xy = 0.0;
+   let mut sum_xx = 0.0;
+   let mut base_time = None;
+
+   for v in samples {
+      let (timestamp, level) = v.borrow();
+
+      let since = if let Some(base_time) = base_time {
+         timestamp.duration_since(base_time).as_secs_f64() / 3600.0
+      } else {
+         base_time = Some(*timestamp);
+         0.0
+      };
+
+      let x = since;
+      let y = *level as f64;
+
+      sum_x += x;
+      sum_y += y;
+      sum_xy += x * y;
+      sum_xx += x * x;
+   }
+
+   let denominator = n * sum_xx - sum_x * sum_x;
+   if denominator.abs() < f64::EPSILON {
+      return None;
+   }
+
+   // Slope represents battery change per hour (negative for drain)
+   let slope = (n * sum_xy - sum_x * sum_y) / denominator;
+
+   // Convert to positive drain rate
+   if slope < 0.0 {
+      Some(-slope)
+   } else {
+      None // Battery not draining
+   }
+}
+
+#[cfg(test)]
+mod tests {
+   use super::*;
+   use crate::airpods::protocol::{BatteryState, BatteryStatus};
+   use std::time::Duration as StdDuration;
+
+   #[test]
+   fn test_battery_history_ring_buffer() {
+      let mut history = BatteryHistory::default();
+      let base_time = Instant::now();
+
+      // Test initial state
+      assert_eq!(history.count, 0);
+      assert!(history.last_level().is_none());
+
+      // Add some samples
+      for i in 0..5 {
+         history.push(base_time + StdDuration::from_secs(i * 60), 100 - i as u8);
+      }
+
+      assert_eq!(history.count, 5);
+      assert_eq!(history.last_level(), Some(96));
+
+      // Test iterator
+      let samples: Vec<_> = history.iter().collect();
+      assert_eq!(samples.len(), 5);
+      assert_eq!(samples[0].1, 100);
+      assert_eq!(samples[4].1, 96);
+   }
+
+   #[test]
+   fn test_battery_history_wraparound() {
+      let mut history = BatteryHistory::default();
+      let base_time = Instant::now();
+
+      // Fill beyond capacity
+      for i in 0..80 {
+         history.push(base_time + StdDuration::from_secs(i * 60), 100 - i as u8);
+      }
+
+      assert_eq!(history.count, BATTERY_HISTORY_SIZE);
+
+      // Check that we have the most recent samples
+      let samples: Vec<_> = history.iter().collect();
+      assert_eq!(samples.len(), BATTERY_HISTORY_SIZE);
+
+      // The oldest sample should be from index 48 (80 - 32)
+      assert_eq!(samples[0].1, 52);
+   }
+
+   #[test]
+   fn test_drain_rate_calculation() {
+      let airpods = AirPods::new(Address::any(), "Test AirPods".to_string());
+
+      // Add battery history with known drain pattern
+      let now = Instant::now();
+      {
+         let mut history = airpods.0.battery_history.lock();
+         let [left_history, right_history] = &mut *history;
+
+         // Clear history and set base_time to 50 minutes ago
+         left_history.clear();
+         right_history.clear();
+
+         // Set base_time to the start of our simulated history
+         let start_time = now - StdDuration::from_secs(3000);
+         left_history.base_time = start_time;
+         right_history.base_time = start_time;
+
+         // Push 6 samples, each 10 minutes apart, with 2% drop each time
+         for i in 0..6 {
+            let time = start_time + StdDuration::from_secs(i * 600);
+            let level = (100 - (i * 2)) as u8;
+            left_history.push(time, level);
+            right_history.push(time, level);
+         }
+      }
+
+      // Calculate drain rate
+      let (rate, alpha) = airpods
+         .calculate_drain_rate_and_alpha()
+         .expect("rate was none");
+      assert!(alpha > 0.0, "Alpha was 0.0");
+
+      // Should be approximately 12% per hour (allowing for some floating point error)
+      assert!(rate > 11.0 && rate < 13.0, "Rate was: {rate}");
+   }
+
+   #[test]
+   fn test_ttl_estimation() {
+      let airpods = AirPods::new(Address::any(), "Test AirPods".to_string());
+
+      // Set current battery levels
+      let battery = BatteryInfo {
+         left: BatteryState {
+            level: 50,
+            status: BatteryStatus::Normal,
+         },
+         right: BatteryState {
+            level: 60,
+            status: BatteryStatus::Normal,
+         },
+         case: BatteryState {
+            level: 80,
+            status: BatteryStatus::Normal,
+         },
+      };
+      airpods.update_battery_info(battery);
+
+      // Add battery history with 12% per hour drain
+      let now = Instant::now();
+      {
+         let mut history = airpods.0.battery_history.lock();
+         let [left_history, right_history] = &mut *history;
+
+         // Clear history and set base_time to 50 minutes ago
+         left_history.clear();
+         right_history.clear();
+
+         // Set base_time to the start of our simulated history
+         let start_time = now - StdDuration::from_secs(3000);
+         left_history.base_time = start_time;
+         right_history.base_time = start_time;
+
+         // Push 6 samples, each 10 minutes apart
+         for i in 0..6 {
+            let time = start_time + StdDuration::from_secs(i * 600);
+            let left_level = (60 - (i * 2)) as u8; // From 60 to 50
+            let right_level = (70 - (i * 2)) as u8; // From 70 to 60
+            left_history.push(time, left_level);
+            right_history.push(time, right_level);
+         }
+      }
+
+      // Estimate TTL
+      let ttl = airpods.estimate_battery_ttl();
+      assert!(ttl.is_some());
+
+      // With 50% battery and ~12% per hour drain, should be around 250 minutes (4.16 hours)
+      let ttl_value = ttl.unwrap();
+      assert!(
+         ttl_value > 200 && ttl_value < 300,
+         "TTL was: {ttl_value} minutes"
+      );
+   }
+
+   #[test]
+   fn test_no_ttl_when_charging() {
+      let airpods = AirPods::new(Address::any(), "Test AirPods".to_string());
+
+      // Set battery with one bud charging
+      let battery = BatteryInfo {
+         left: BatteryState {
+            level: 50,
+            status: BatteryStatus::Charging,
+         },
+         right: BatteryState {
+            level: 60,
+            status: BatteryStatus::Normal,
+         },
+         case: BatteryState {
+            level: 80,
+            status: BatteryStatus::Normal,
+         },
+      };
+      airpods.update_battery_info(battery);
+
+      // Should return None when charging
+      assert!(airpods.estimate_battery_ttl().is_none());
+   }
+
+   #[test]
+   fn test_no_ttl_with_insufficient_data() {
+      let airpods = AirPods::new(Address::any(), "Test AirPods".to_string());
+
+      // Set battery levels
+      let battery = BatteryInfo {
+         left: BatteryState {
+            level: 50,
+            status: BatteryStatus::Normal,
+         },
+         right: BatteryState {
+            level: 60,
+            status: BatteryStatus::Normal,
+         },
+         case: BatteryState {
+            level: 80,
+            status: BatteryStatus::Normal,
+         },
+      };
+      airpods.update_battery_info(battery);
+
+      // Add only 3 samples (less than MIN_SAMPLES)
+      let now = Instant::now();
+      {
+         let mut history = airpods.0.battery_history.lock();
+         let [left_history, _] = &mut *history;
+         for i in 0..3 {
+            left_history.push(now - StdDuration::from_secs(i * 600), 50 - i as u8);
+         }
+      }
+
+      // Should return None with insufficient data
+      assert!(airpods.estimate_battery_ttl().is_none());
    }
 }

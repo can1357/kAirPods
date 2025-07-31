@@ -170,8 +170,7 @@ Item {
                 // Battery status
                 BatteryStatus {
                     Layout.fillWidth: true
-                    battery: currentDevice ? currentDevice.battery : null
-                    earDetection: currentDevice ? currentDevice.ear_detection : null
+                    device: currentDevice
                 }
 
                 // Noise control
