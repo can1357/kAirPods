@@ -19,20 +19,22 @@
   sudo pacman -S base-devel pkgconf dbus bluez-libs
   ```
 
+- Plasma SDK (provides `kpackagetool6` for widget installation)
+
 ## Building from Source
 
 1. **Clone the repository**
 
    ```bash
    git clone https://github.com/can1357/kAirPods.git
-   cd kairpods
+   cd kAirPods
    ```
 
 2. **Build the Rust service**
 
    ```bash
    cd service
-   cargo build --release
+   cargo build --release --locked
    cd ..
    ```
 
@@ -104,6 +106,8 @@ This will build and install all components automatically.
 
 - The service needs access to Bluetooth and D-Bus
 - SELinux/AppArmor may need configuration on some distributions
+- On systems without a `bluetooth` group, you may need to set capabilities:
+  `sudo setcap 'cap_net_raw,cap_net_admin+eip' /usr/bin/kairpodsd`
 
 ## Uninstalling
 

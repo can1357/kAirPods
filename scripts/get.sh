@@ -32,7 +32,7 @@ log_info "========================"
 if [[ -f "./scripts/install.sh" ]] && [[ -f "./service/Cargo.toml" ]] && grep -q "kairpodsd" "./service/Cargo.toml" 2>/dev/null; then
     log_info "Found existing kAirPods repository"
     log_info "Updating to latest version..."
-    git pull --rebase || {
+    git pull --rebase --autostash || {
         log_warn "Failed to update repository, continuing with current version"
     }
     log_info "Running installer..."
@@ -40,13 +40,13 @@ if [[ -f "./scripts/install.sh" ]] && [[ -f "./service/Cargo.toml" ]] && grep -q
 else
     # Clone repository
     log_info "Cloning kAirPods repository..."
-    git clone --depth 1 https://github.com/can1357/kAirPods.git "$TEMP_DIR/kairpods" || {
+    git clone --depth 1 https://github.com/can1357/kAirPods.git "$TEMP_DIR/kAirPods" || {
         log_error "Failed to clone repository"
         exit 1
     }
 
     # Run installer
-    cd "$TEMP_DIR/kairpods"
+    cd "$TEMP_DIR/kAirPods"
     log_info "Running installer..."
     bash ./scripts/install.sh "$@"
 fi

@@ -28,7 +28,7 @@ busctl --user call org.kairpods /org/kairpods/manager \
 ```bash
 # Set to ANC
 busctl --user call org.kairpods /org/kairpods/manager \
-    org.kairpods.manager SendCommand ssa{sv} "AA:BB:CC:DD:EE:FF" "set_noise_mode" 1 "value" s "anc"
+    org.kairpods.manager SendCommand ssa{sv} "AA:BB:CC:DD:EE:FF" "set_noise_mode" 1 "value" s "anc"  # 1 = dict length
 
 # Set to Transparency
 busctl --user call org.kairpods /org/kairpods/manager \
@@ -43,7 +43,7 @@ busctl --user call org.kairpods /org/kairpods/manager \
 ```bash
 # Enable ear detection
 busctl --user call org.kairpods /org/kairpods/manager \
-    org.kairpods.manager SendCommand ssa{sv} "AA:BB:CC:DD:EE:FF" "set_feature" 2 "feature" s "ear_detection" "enabled" b true
+    org.kairpods.manager SendCommand ssa{sv} "AA:BB:CC:DD:EE:FF" "set_feature" 2 "feature" s "ear_detection" "enabled" b true  # 2 = dict length
 
 # Disable ear detection
 busctl --user call org.kairpods /org/kairpods/manager \
@@ -59,6 +59,20 @@ busctl --user call org.kairpods /org/kairpods/manager \
 # Disconnect
 busctl --user call org.kairpods /org/kairpods/manager \
     org.kairpods.manager DisconnectDevice s "AA:BB:CC:DD:EE:FF"
+```
+
+### Passthrough command
+```bash
+# Send raw passthrough command (advanced use)
+busctl --user call org.kairpods /org/kairpods/manager \
+    org.kairpods.manager Passthrough ss "AA:BB:CC:DD:EE:FF" "raw_command_data"
+```
+
+### Get connected device count
+```bash
+# Get the ConnectedCount property
+busctl --user get-property org.kairpods /org/kairpods/manager \
+    org.kairpods.manager ConnectedCount
 ```
 
 ### Monitor signals
@@ -124,6 +138,10 @@ bus.add_signal_receiver(
     dbus_interface="org.kairpods.manager",
     signal_name="BatteryUpdated"
 )
+
+# Note: To receive signals, you need to run a GLib MainLoop:
+# from gi.repository import GLib
+# GLib.MainLoop().run()
 ```
 
 ## Return Format

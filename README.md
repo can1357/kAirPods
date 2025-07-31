@@ -2,7 +2,8 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![KDE Plasma 6](https://img.shields.io/badge/KDE%20Plasma-6-blue)](https://kde.org/plasma-desktop/)
-[![CI](https://github.com/can1357/kAirPods/actions/workflows/ci.yml/badge.svg)](https://github.com/can1357/kAirPods/actions/workflows/ci.yml)[![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![CI](https://github.com/can1357/kAirPods/actions/workflows/ci.yml/badge.svg)](https://github.com/can1357/kAirPods/actions/workflows/ci.yml)
+[![Rust](https://img.shields.io/badge/Built%20with-Rust-orange.svg)](https://www.rust-lang.org/)
 
 Native **AirPods®** integration for **KDE Plasma 6** powered by a modern, low-latency Rust backend.
 
@@ -36,7 +37,7 @@ curl -fsSL https://raw.githubusercontent.com/can1357/kAirPods/master/scripts/get
 ```bash
 # Clone the repository
 git clone https://github.com/can1357/kAirPods.git
-cd kairpods
+cd kAirPods
 
 # Run the automated installer
 ./scripts/install.sh
@@ -55,14 +56,14 @@ The installer will:
 
 ## 📋 Prerequisites
 
-| Component          | Minimum Version | Notes                              |
-| ------------------ | --------------- | ---------------------------------- |
-| **KDE Plasma**     | 6.0             | Required for widget support        |
-| **Rust toolchain** | 1.88+           | [Install Rust](https://rustup.rs/) |
-| **BlueZ**          | 5.50+           | Bluetooth stack                    |
-| **Linux Kernel**   | 5.10+           | L2CAP socket support               |
-| **systemd**        | 247+            | User services support              |
-| **D-Bus**          | 1.12+           | IPC communication                  |
+| Component          | Minimum Version | Notes                                              |
+| ------------------ | --------------- | -------------------------------------------------- |
+| **KDE Plasma**     | 6.0             | Required for widget support                        |
+| **Rust toolchain** | 1.88+           | [Install Rust](https://rustup.rs/)                 |
+| **BlueZ**          | 5.50+           | Bluetooth stack (package: `bluez` or `bluez-libs`) |
+| **Linux Kernel**   | 5.10+           | L2CAP socket support                               |
+| **systemd**        | 247+            | User services support                              |
+| **D-Bus**          | 1.12+           | IPC communication                                  |
 
 ### 📦 Development Packages
 
@@ -195,7 +196,7 @@ busctl --user call org.kairpods /org/kairpods/manager \
 
 # Control noise mode
 busctl --user call org.kairpods /org/kairpods/manager \
-    org.kairpods.manager SendCommand "ss" "AA:BB:CC:DD:EE:FF" "set_noise_mode" 1 "value" "s" "anc"
+    org.kairpods.manager SendCommand ssa{sv} "AA:BB:CC:DD:EE:FF" "set_noise_mode" 1 "value" s "anc"
 ```
 
 <details>
