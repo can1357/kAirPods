@@ -50,6 +50,7 @@ plasmoidviewer -a .
 
 ## Testing
 
+- Run unit tests: `cargo test` (when available)
 - Test with different AirPods models if possible
 - Verify D-Bus interface functionality
 - Check memory usage and performance

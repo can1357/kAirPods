@@ -30,6 +30,9 @@ Native **AirPods®** integration for **KDE Plasma 6** powered by a modern, low-l
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/can1357/kAirPods/master/scripts/get.sh | bash
+
+# With options:
+curl -fsSL https://raw.githubusercontent.com/can1357/kAirPods/master/scripts/get.sh | bash -s -- --verbose --debug
 ```
 
 ### Manual install
@@ -146,7 +149,7 @@ Click the widget to see battery levels and control your AirPods
 <summary><b>Permission denied errors</b></summary>
 
 - The installer automatically adds you to the bluetooth group
-- If you still have issues, try: `sudo setcap cap_net_raw+ep /usr/bin/kairpodsd`
+- If you still have issues, try: `sudo setcap 'cap_net_raw,cap_net_admin+eip' $(command -v kairpodsd)`
 </details>
 
 <details>

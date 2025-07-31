@@ -27,6 +27,8 @@ If applicable, add screenshots to help explain your problem.
  - KDE Plasma Version: [e.g. 6.0.1]
  - AirPods Model: [e.g. AirPods Pro 2]
  - Service Version: [output of `kairpodsd --version`]
+ - Installation Method: [Script / Package / Manual]
+ - Commit/Tag: [e.g. v1.0.0 or commit hash]
 
 **Logs**
 Please attach relevant logs:

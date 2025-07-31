@@ -19,21 +19,28 @@ INSTALL_WIDGET=true
 PREFIX="/usr"
 DEBUG=false
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Colors - readonly for safety
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[0;34m'
+readonly NC='\033[0m' # No Color
+
+# Pre-build tags for performance
+readonly TAG_INFO="${GREEN}[INFO]${NC}"
+readonly TAG_WARN="${YELLOW}[WARN]${NC}"
+readonly TAG_ERROR="${RED}[ERROR]${NC}"
+readonly TAG_STEP="${BLUE}==>${NC}"
 
 # Logging functions
-log_info() { printf '%b\n' "${GREEN}[INFO]${NC} $*"; }
-log_warn() { printf '%b\n' "${YELLOW}[WARN]${NC} $*"; }
-log_error() { printf '%b\n' "${RED}[ERROR]${NC} $*" >&2; }
-log_step() { printf '%b\n' "${BLUE}==>${NC} $*"; }
+log_info() { printf '%b\n' "$TAG_INFO $*"; }
+log_warn() { printf '%b\n' "$TAG_WARN $*"; }
+log_error() { printf '%b\n' "$TAG_ERROR $*" >&2; }
+log_step() { printf '%b\n' "$TAG_STEP $*"; }
 
-# Trap errors
+# Trap errors and interrupts
 trap 'log_error "Installation aborted (line $LINENO)"' ERR
+trap 'log_error "Installation cancelled"; exit 130' INT
 
 # Usage
 usage() {
@@ -134,12 +141,6 @@ fi
 log_info "kAirPods Installation Script"
 echo "================================"
 
-# Enable verbose mode if requested
-if [[ "$DEBUG" == "true" ]]; then
-    set -x
-    log_info "Verbose mode enabled"
-fi
-
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
     log_error "This script should not be run as root!"
@@ -154,10 +155,12 @@ if ! sudo -v; then
     exit 1
 fi
 
-# Keep sudo alive in background
-(while true; do sudo -n true; sleep 60; done 2>/dev/null) &
-SUDO_PID=$!
-trap '[[ -n ${SUDO_PID:-} ]] && kill "$SUDO_PID" 2>/dev/null' EXIT
+# Enable verbose mode if requested
+if [[ "$DEBUG" == "true" ]]; then
+    PS4='+ ${BASH_SOURCE}:${LINENO}: '  # Clean trace output
+    set -x
+    log_info "Verbose mode enabled"
+fi
 
 # Check prerequisites
 log_step "Checking prerequisites..."
@@ -171,7 +174,7 @@ fi
 
 RUST_VERSION=$(rustc --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "0.0.0")
 REQUIRED_VERSION="1.88.0"
-if [[ "$(printf '%s\n' "$REQUIRED_VERSION" "$RUST_VERSION" | sort -V | head -n1)" != "$REQUIRED_VERSION" ]]; then
+if [[ "$(LC_ALL=C printf '%s\n' "$REQUIRED_VERSION" "$RUST_VERSION" | sort -V | head -n1)" != "$REQUIRED_VERSION" ]]; then
     log_error "Rust version $RUST_VERSION is too old. Minimum required: $REQUIRED_VERSION"
     exit 1
 fi
@@ -272,7 +275,7 @@ if [[ -f "$HOME/.config/systemd/user/${OLD_SERVICE_ID}.service" ]]; then
 fi
 
 # Remove old plasmoid if exists
-if kpackagetool6 --type Plasma/Applet --list | grep -qE "$OLD_SERVICE_ID|$OLD_PLASMOID_ID|$PLASMOID_ID"; then
+if kpackagetool6 --type Plasma/Applet --list | grep -E "^(${OLD_PLASMOID_ID}|${PLASMOID_ID})\s" >/dev/null 2>&1; then
     log_warn "Removing old plasmoid..."
     kpackagetool6 --type Plasma/Applet --remove "$OLD_PLASMOID_ID" 2>/dev/null || true
     kpackagetool6 --type Plasma/Applet --remove "$PLASMOID_ID" 2>/dev/null || true
@@ -299,23 +302,34 @@ if [[ "$INSTALL_SERVICE" == "true" ]]; then
     log_step "Installing service binary..."
     sudo install -Dm755 "$BINARY_PATH" "$PREFIX/bin/$SERVICE_ID"
     log_info "✓ Service binary installed"
-    
+
     # Set capabilities if bluetooth group doesn't exist
     if [[ "$SET_CAPABILITIES" == "true" ]]; then
-        log_step "Setting capabilities for Bluetooth access..."
-        sudo setcap 'cap_net_raw,cap_net_admin+eip' "$PREFIX/bin/$SERVICE_ID" || {
-            log_warn "Failed to set capabilities - service may have limited functionality"
-        }
-        log_info "✓ Capabilities set for raw socket access"
+        if command -v setcap &>/dev/null; then
+            log_step "Setting capabilities for Bluetooth access..."
+            sudo setcap 'cap_net_raw,cap_net_admin+eip' "$PREFIX/bin/$SERVICE_ID" || {
+                log_warn "Failed to set capabilities - service may have limited functionality"
+            }
+            log_info "✓ Capabilities set for raw socket access"
+        else
+            log_warn "setcap not found - install libcap package for capability support"
+            log_warn "Service may have limited functionality without bluetooth group membership"
+        fi
     fi
 
     # Install systemd user service
     log_step "Installing systemd service..."
     mkdir -p "$HOME/.config/systemd/user/"
-    install -Dm644 "systemd/user/${SERVICE_ID}.service" "$HOME/.config/systemd/user/"
+    # If PREFIX is not /usr, update the service file path
+    if [[ "$PREFIX" != "/usr" ]]; then
+        sed "s:/usr/bin:$PREFIX/bin:g" "systemd/user/${SERVICE_ID}.service" > "$HOME/.config/systemd/user/${SERVICE_ID}.service"
+        chmod 644 "$HOME/.config/systemd/user/${SERVICE_ID}.service"
+    else
+        install -Dm644 "systemd/user/${SERVICE_ID}.service" "$HOME/.config/systemd/user/"
+    fi
     systemctl --user daemon-reload
     log_info "✓ Systemd service installed"
-    
+
     # Return to project root
     cd "$PROJECT_ROOT"
 
@@ -361,5 +375,4 @@ if [[ "${NEED_RELOGIN:-false}" == "true" ]]; then
     log_warn "You need to log out and back in for bluetooth group changes to take effect!"
 fi
 
-# Cleanup sudo keep-alive
-[[ -n ${SUDO_PID:-} ]] && kill "$SUDO_PID" 2>/dev/null || true
+# Script completed successfully

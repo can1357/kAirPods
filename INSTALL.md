@@ -6,6 +6,7 @@
 - Rust toolchain (1.88+)
 - BlueZ 5.50 or later
 - systemd (for user services)
+- Plasma SDK (provides `kpackagetool6` for widget installation)
 - Development packages:
 
   ```bash
@@ -107,7 +108,7 @@ This will build and install all components automatically.
 - The service needs access to Bluetooth and D-Bus
 - SELinux/AppArmor may need configuration on some distributions
 - On systems without a `bluetooth` group, you may need to set capabilities:
-  `sudo setcap 'cap_net_raw,cap_net_admin+eip' /usr/bin/kairpodsd`
+  `sudo setcap 'cap_net_raw,cap_net_admin+eip' $(command -v kairpodsd)`
 
 ## Uninstalling
 
