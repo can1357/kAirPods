@@ -105,28 +105,80 @@ impl EventProcessor {
       match event {
          AirPodsEvent::DeviceConnected => {
             iface.device_connected(addr_str).await?;
+            // Emit property changes
+            iface
+               .get_mut()
+               .await
+               .devices_changed(iface.signal_emitter())
+               .await?;
+            iface
+               .get_mut()
+               .await
+               .connected_count_changed(iface.signal_emitter())
+               .await?;
          },
          AirPodsEvent::DeviceDisconnected => {
             iface.device_disconnected(addr_str).await?;
+            // Emit property changes
+            iface
+               .get_mut()
+               .await
+               .devices_changed(iface.signal_emitter())
+               .await?;
+            iface
+               .get_mut()
+               .await
+               .connected_count_changed(iface.signal_emitter())
+               .await?;
          },
          AirPodsEvent::BatteryUpdated(battery) => {
             iface
                .battery_updated(addr_str, &battery.to_json().to_string())
                .await?;
+            // Emit property change for devices (battery state changed)
+            iface
+               .get_mut()
+               .await
+               .devices_changed(iface.signal_emitter())
+               .await?;
          },
          AirPodsEvent::NoiseControlChanged(mode) => {
             iface.noise_control_changed(addr_str, mode.to_str()).await?;
+            // Emit property change for devices (noise control state changed)
+            iface
+               .get_mut()
+               .await
+               .devices_changed(iface.signal_emitter())
+               .await?;
          },
          AirPodsEvent::EarDetectionChanged(ear_detection) => {
             iface
                .ear_detection_changed(addr_str, &ear_detection.to_json().to_string())
                .await?;
+            // Emit property change for devices (ear detection state changed)
+            iface
+               .get_mut()
+               .await
+               .devices_changed(iface.signal_emitter())
+               .await?;
          },
          AirPodsEvent::DeviceNameChanged(name) => {
             iface.device_name_changed(addr_str, &name).await?;
+            // Emit property change for devices (name changed)
+            iface
+               .get_mut()
+               .await
+               .devices_changed(iface.signal_emitter())
+               .await?;
          },
          AirPodsEvent::DeviceError => {
             iface.device_error(addr_str).await?;
+            // Emit property change for devices (error state might affect device info)
+            iface
+               .get_mut()
+               .await
+               .devices_changed(iface.signal_emitter())
+               .await?;
          },
       }
       Ok(())

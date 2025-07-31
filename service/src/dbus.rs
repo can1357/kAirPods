@@ -51,10 +51,11 @@ impl AirPodsService {
    }
 
    async fn send_command(
-      &self,
+      &mut self,
       address: String,
       action: String,
       params: HashMap<String, zvariant::Value<'_>>,
+      #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
    ) -> zbus::fdo::Result<bool> {
       let addr = Address::from_str(&address).map_err(to_arg_error)?;
 
@@ -75,6 +76,9 @@ impl AirPodsService {
             dev.set_noise_control(mode).await?;
 
             info!("Set noise mode to {mode} for {address}");
+
+            // Emit property change immediately so UI updates
+            self.devices_changed(&emitter).await?;
          },
 
          "set_feature" => {
@@ -100,6 +104,9 @@ impl AirPodsService {
 
             dev.set_feature(feature, enabled).await?;
             info!("Set feature {feature} to {enabled} for {address}");
+
+            // Emit property change immediately so UI updates
+            self.devices_changed(&emitter).await?;
          },
 
          _ => {

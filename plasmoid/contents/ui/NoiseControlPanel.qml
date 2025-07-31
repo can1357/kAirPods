@@ -9,7 +9,7 @@ Card {
     property string currentMode: "off"
     signal modeChanged(mode: string)
 
-    title: "Noise Cancellation"
+    title: i18n("Noise Cancellation")
     implicitHeight: Kirigami.Units.gridUnit * 12
 
     contentItem: Component {
@@ -22,7 +22,7 @@ Card {
             NoiseControlButton {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                text: "Off"
+                text: i18n("Off")
                 icon: "audio-volume-muted"
                 mode: "off"
                 checked: currentMode === "off"
@@ -33,7 +33,7 @@ Card {
             NoiseControlButton {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                text: "Noise\nCancellation"
+                text: i18n("Active")
                 icon: "audio-headphones"
                 mode: "anc"
                 checked: currentMode === "anc"
@@ -44,7 +44,7 @@ Card {
             NoiseControlButton {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                text: "Transparency"
+                text: i18n("Transparency")
                 icon: "view-visible"
                 mode: "transparency"
                 checked: currentMode === "transparency"
@@ -55,8 +55,8 @@ Card {
             NoiseControlButton {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                text: "Adaptive"
-                icon: "im-status-away"
+                text: i18n("Adaptive")
+                icon: "view-refresh"
                 mode: "adaptive"
                 checked: currentMode === "adaptive"
                 onClicked: root.modeChanged("adaptive")

@@ -55,67 +55,96 @@ Item {
             }
         }
 
-        // Device selector card
+        // Device selector card - only show if multiple devices
         Card {
             Layout.fillWidth: true
-            title: "Device"
+            title: i18n("Device")
             showTitle: false
-            implicitHeight: Kirigami.Units.gridUnit * 2.5
+            implicitHeight: Object.keys(devices).length != 1 ? Kirigami.Units.gridUnit * 2.5 : Kirigami.Units.gridUnit * 2
+            visible: Object.keys(devices).length > 0
 
             contentItem: Component {
-                PlasmaComponents3.ComboBox {
+                Loader {
                     Layout.fillWidth: true
-                    enabled: Object.keys(devices).length > 0
 
-                    model: {
-                        var items = []
-                        var nameCount = {}
+                    sourceComponent: Object.keys(devices).length != 1 ? comboBoxComponent : labelComponent
 
-                        // Count occurrences of each device name
-                        for (var addr in devices) {
-                            var device = devices[addr]
-                            if (nameCount[device.name]) {
-                                nameCount[device.name]++
-                            } else {
-                                nameCount[device.name] = 1
+                    Component {
+                        id: labelComponent
+                        RowLayout {
+                            spacing: Kirigami.Units.smallSpacing
+
+                            Kirigami.Icon {
+                                source: "audio-headphones"
+                                Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                                Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                            }
+
+                            PlasmaComponents3.Label {
+                                Layout.fillWidth: true
+                                text: currentDevice ? currentDevice.name : ""
+                                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.1
                             }
                         }
-
-                        // Populate items with device names, showing MAC if duplicates exist
-                        for (var addr in devices) {
-                            var device = devices[addr]
-                            var displayName = device.name
-                            if (nameCount[device.name] > 1) {
-                                displayName += " (" + addr + ")"
-                            }
-                            items.push({
-                                text: displayName,
-                                value: addr
-                            })
-                        }
-
-                        if (items.length == 0) {
-                            items.push({ text: "No devices", value: "" })
-                        }
-
-                        return items
-                    }
-                    textRole: "text"
-                    valueRole: "value"
-
-                    currentIndex: {
-                        var items = model
-                        for (var i = 0; i < items.length; i++) {
-                            if (items[i].value === selectedDevice) {
-                                return i
-                            }
-                        }
-                        return 0
                     }
 
-                    onCurrentValueChanged: {
-                        if (currentValue !== selectedDevice) {
-                            deviceSelected(currentValue)
+                    Component {
+                        id: comboBoxComponent
+                        PlasmaComponents3.ComboBox {
+                            Layout.fillWidth: true
+                            enabled: Object.keys(devices).length > 0
+
+                            model: {
+                                var items = []
+                                var nameCount = {}
+
+                                // Count occurrences of each device name
+                                for (var addr in devices) {
+                                    var device = devices[addr]
+                                    if (nameCount[device.name]) {
+                                        nameCount[device.name]++
+                                    } else {
+                                        nameCount[device.name] = 1
+                                    }
+                                }
+
+                                // Populate items with device names, showing MAC if duplicates exist
+                                for (var addr in devices) {
+                                    var device = devices[addr]
+                                    var displayName = device.name
+                                    if (nameCount[device.name] > 1) {
+                                        displayName += " (" + addr + ")"
+                                    }
+                                    items.push({
+                                        text: displayName,
+                                        value: addr
+                                    })
+                                }
+
+                                if (items.length == 0) {
+                                    items.push({ text: i18n("No devices"), value: "" })
+                                }
+
+                                return items
+                            }
+                            textRole: "text"
+                            valueRole: "value"
+
+                            currentIndex: {
+                                var items = model
+                                for (var i = 0; i < items.length; i++) {
+                                    if (items[i].value === selectedDevice) {
+                                        return i
+                                    }
+                                }
+                                return 0
+                            }
+
+                            onCurrentValueChanged: {
+                                if (currentValue !== selectedDevice) {
+                                    deviceSelected(currentValue)
+                                }
+                            }
                         }
                     }
                 }
@@ -134,6 +163,7 @@ Item {
 
             ColumnLayout {
                 anchors.fill: parent
+                anchors.bottomMargin: Kirigami.Units.largeSpacing * 2
                 spacing: Kirigami.Units.largeSpacing
                 visible: parent.opacity > 0
 
@@ -175,7 +205,7 @@ Item {
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "No device connected"
+                    text: i18n("No device connected")
                     font.pixelSize: Kirigami.Units.gridUnit * 0.8
                     color: Kirigami.Theme.textColor
                     opacity: 0.5
