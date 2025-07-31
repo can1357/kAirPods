@@ -1,114 +1,365 @@
-#!/bin/bash
-set -e
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
 
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-echo -e "${GREEN}kAirPods Installation Script${NC}"
+# Service identifiers
+SERVICE_ID="kairpodsd"
+PLASMOID_ID="org.kairpods.plasma"
+OLD_SERVICE_ID="kde-airpods-service"
+OLD_PLASMOID_ID="org.kde.plasma.airpods"
+
+# Build mode
+BUILD_MODE="release"
+INSTALL_SERVICE=true
+INSTALL_WIDGET=true
+PREFIX="/usr"
+DEBUG=false
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Logging functions
+log_info() { printf '%b\n' "${GREEN}[INFO]${NC} $*"; }
+log_warn() { printf '%b\n' "${YELLOW}[WARN]${NC} $*"; }
+log_error() { printf '%b\n' "${RED}[ERROR]${NC} $*" >&2; }
+log_step() { printf '%b\n' "${BLUE}==>${NC} $*"; }
+
+# Trap errors
+trap 'log_error "Installation aborted (line $LINENO)"' ERR
+
+# Usage
+usage() {
+    cat << EOF
+kAirPods Installation Script
+
+Usage: $0 [OPTIONS]
+
+Options:
+    -h, --help          Show this help message
+    -d, --debug         Build in debug mode (default: release)
+    -x, --verbose       Enable verbose output for debugging
+    --no-service        Skip service installation
+    --no-widget         Skip widget installation
+    --prefix PATH       Installation prefix (default: /usr)
+    --uninstall         Uninstall kAirPods
+
+Examples:
+    $0                  # Standard installation
+    $0 --debug          # Install debug build
+    $0 --uninstall      # Remove kAirPods
+
+EOF
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -d|--debug)
+            BUILD_MODE="debug"
+            shift
+            ;;
+        -x|--verbose)
+            DEBUG=true
+            shift
+            ;;
+        --no-service)
+            INSTALL_SERVICE=false
+            shift
+            ;;
+        --no-widget)
+            INSTALL_WIDGET=false
+            shift
+            ;;
+        --prefix)
+            PREFIX="$2"
+            shift 2
+            ;;
+        --uninstall)
+            UNINSTALL=true
+            shift
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            usage
+            exit 1
+            ;;
+    esac
+done
+
+# Uninstall function
+uninstall_kairpods() {
+    log_info "Uninstalling kAirPods..."
+
+    # Stop and disable service
+    if systemctl --user is-enabled "$SERVICE_ID" &>/dev/null; then
+        log_step "Stopping and disabling service..."
+        systemctl --user stop "$SERVICE_ID" || true
+        systemctl --user disable "$SERVICE_ID" || true
+    fi
+
+    # Remove service files
+    log_step "Removing service files..."
+    sudo rm -f "$PREFIX/bin/$SERVICE_ID"
+    rm -f "$HOME/.config/systemd/user/${SERVICE_ID}.service"
+    systemctl --user daemon-reload
+
+    # Remove widget
+    if kpackagetool6 --type Plasma/Applet --list | grep -q "$PLASMOID_ID"; then
+        log_step "Removing widget..."
+        kpackagetool6 --type Plasma/Applet --remove "$PLASMOID_ID" || true
+    fi
+
+    log_info "Uninstallation complete!"
+    exit 0
+}
+
+# Handle uninstall
+if [[ "${UNINSTALL:-false}" == "true" ]]; then
+    uninstall_kairpods
+fi
+
+# Main installation
+log_info "kAirPods Installation Script"
 echo "================================"
 
-# Check prerequisites
-echo -e "\n${YELLOW}Checking prerequisites...${NC}"
+# Enable verbose mode if requested
+if [[ "$DEBUG" == "true" ]]; then
+    set -x
+    log_info "Verbose mode enabled"
+fi
 
-# Check for Rust
-if ! command -v cargo &> /dev/null; then
-    echo -e "${RED}Error: Rust toolchain not found. Please install Rust first.${NC}"
+# Check if running as root
+if [[ $EUID -eq 0 ]]; then
+    log_error "This script should not be run as root!"
+    log_error "It needs to add your regular user to groups."
+    exit 1
+fi
+
+# Sudo privilege check and caching
+log_step "Checking sudo privileges..."
+if ! sudo -v; then
+    log_error "Sudo privileges required for installation"
+    exit 1
+fi
+
+# Keep sudo alive in background
+(while true; do sudo -n true; sleep 60; done 2>/dev/null) &
+SUDO_PID=$!
+trap '[[ -n ${SUDO_PID:-} ]] && kill "$SUDO_PID" 2>/dev/null' EXIT
+
+# Check prerequisites
+log_step "Checking prerequisites..."
+
+# Check Rust version
+if ! command -v cargo &>/dev/null; then
+    log_error "Rust toolchain not found. Please install Rust first."
     echo "Visit: https://rustup.rs/"
     exit 1
 fi
 
-# Check for KDE Plasma 6
-if ! command -v kpackagetool6 &> /dev/null; then
-    echo -e "${RED}Error: KDE Plasma 6 tools not found.${NC}"
+RUST_VERSION=$(rustc --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "0.0.0")
+REQUIRED_VERSION="1.88.0"
+if [[ "$(printf '%s\n' "$REQUIRED_VERSION" "$RUST_VERSION" | sort -V | head -n1)" != "$REQUIRED_VERSION" ]]; then
+    log_error "Rust version $RUST_VERSION is too old. Minimum required: $REQUIRED_VERSION"
     exit 1
 fi
+log_info "✓ Rust $RUST_VERSION"
+
+# Check for KDE Plasma 6
+if ! command -v kpackagetool6 &>/dev/null; then
+    log_error "KDE Plasma 6 tools not found."
+    exit 1
+fi
+log_info "✓ KDE Plasma 6"
 
 # Check for systemd
-if ! command -v systemctl &> /dev/null; then
-    echo -e "${RED}Error: systemd not found.${NC}"
+if ! command -v systemctl &>/dev/null; then
+    log_error "systemd not found."
     exit 1
 fi
+log_info "✓ systemd"
 
-echo -e "${GREEN}✓ All prerequisites met${NC}"
+# Check for required development packages
+log_step "Checking development dependencies..."
+declare -a missing_deps=()
 
-# Check for old installation and remove it
-echo -e "\n${YELLOW}Checking for previous installation...${NC}"
-if [ -f /usr/bin/kde-airpods-service ]; then
-    echo -e "${YELLOW}Found old kde-airpods-service, removing...${NC}"
-    sudo rm -f /usr/bin/kde-airpods-service
+# Check for pkg-config
+if ! command -v pkg-config &>/dev/null; then
+    missing_deps+=("pkg-config")
 fi
 
-if systemctl --user is-enabled kde-airpods-service &> /dev/null; then
-    echo -e "${YELLOW}Disabling old systemd service...${NC}"
-    systemctl --user stop kde-airpods-service || true
-    systemctl --user disable kde-airpods-service || true
+# Check for dbus development files
+if ! pkg-config --exists dbus-1 2>/dev/null; then
+    missing_deps+=("libdbus-1-dev")
 fi
 
-if [ -f ~/.config/systemd/user/kde-airpods-service.service ]; then
-    echo -e "${YELLOW}Removing old systemd service file...${NC}"
-    rm -f ~/.config/systemd/user/kde-airpods-service.service
+# Check for bluetooth development files (some distros use bluez, others libbluetooth)
+if ! pkg-config --exists bluez 2>/dev/null && ! pkg-config --exists libbluetooth 2>/dev/null; then
+    if [[ "$DEBUG" == "true" ]]; then
+        log_warn "Neither 'pkg-config --exists bluez' nor 'pkg-config --exists libbluetooth' succeeded"
+    fi
+    missing_deps+=("libbluetooth-dev")
+fi
+
+if [[ ${#missing_deps[@]} -gt 0 ]]; then
+    log_error "Missing development packages: ${missing_deps[*]}"
+    echo -e "\nPlease install them using:"
+    if command -v apt &>/dev/null; then
+        log_warn "sudo apt install ${missing_deps[*]}"
+    elif command -v dnf &>/dev/null; then
+        log_warn "sudo dnf install gcc pkg-config dbus-devel bluez-libs-devel"
+    elif command -v pacman &>/dev/null; then
+        log_warn "sudo pacman -S base-devel pkgconf dbus bluez-libs"
+    fi
+    exit 1
+fi
+log_info "✓ All development dependencies present"
+
+# Check bluetooth group membership
+log_step "Checking bluetooth permissions..."
+BLUETOOTH_GROUP_EXISTS=false
+SET_CAPABILITIES=false
+
+if getent group bluetooth >/dev/null 2>&1; then
+    BLUETOOTH_GROUP_EXISTS=true
+    if ! groups | grep -q -- 'bluetooth'; then
+        log_warn "Adding user to bluetooth group..."
+        sudo usermod -aG bluetooth "$USER"
+        log_info "✓ User added to bluetooth group"
+        log_warn "Note: You'll need to log out and back in for this to take effect."
+        NEED_RELOGIN=true
+    else
+        log_info "✓ User is in bluetooth group"
+    fi
+else
+    log_warn "Bluetooth group does not exist on this system"
+    log_warn "This is normal on some distributions (e.g., Fedora)"
+    log_info "Will set capabilities on the binary for Bluetooth access"
+    SET_CAPABILITIES=true
+fi
+
+# Clean up old installation
+log_step "Checking for previous installation..."
+
+# Old service cleanup
+if [[ -f "/usr/bin/$OLD_SERVICE_ID" ]]; then
+    log_warn "Found old $OLD_SERVICE_ID, removing..."
+    sudo rm -f "/usr/bin/$OLD_SERVICE_ID"
+fi
+
+if systemctl --user is-enabled "$OLD_SERVICE_ID" &>/dev/null; then
+    log_warn "Disabling old systemd service..."
+    systemctl --user stop "$OLD_SERVICE_ID" || true
+    systemctl --user disable "$OLD_SERVICE_ID" || true
+fi
+
+if [[ -f "$HOME/.config/systemd/user/${OLD_SERVICE_ID}.service" ]]; then
+    log_warn "Removing old systemd service file..."
+    rm -f "$HOME/.config/systemd/user/${OLD_SERVICE_ID}.service"
     systemctl --user daemon-reload
 fi
 
 # Remove old plasmoid if exists
-if kpackagetool6 --type Plasma/Applet --list | grep -q "kde-airpods\|kairpods"; then
-    echo -e "${YELLOW}Removing old plasmoid...${NC}"
-    kpackagetool6 --type Plasma/Applet --remove org.kde.plasma.airpods || true
-    kpackagetool6 --type Plasma/Applet --remove org.kairpods.plasma || true
+if kpackagetool6 --type Plasma/Applet --list | grep -qE "$OLD_SERVICE_ID|$OLD_PLASMOID_ID|$PLASMOID_ID"; then
+    log_warn "Removing old plasmoid..."
+    kpackagetool6 --type Plasma/Applet --remove "$OLD_PLASMOID_ID" 2>/dev/null || true
+    kpackagetool6 --type Plasma/Applet --remove "$PLASMOID_ID" 2>/dev/null || true
 fi
 
-echo -e "${GREEN}✓ Old installation cleaned up${NC}"
+log_info "✓ Old installation cleaned up"
 
 # Build Rust service
-echo -e "\n${YELLOW}Building Rust service...${NC}"
-cd "$PROJECT_ROOT/service"
-cargo build --release
-echo -e "${GREEN}✓ Service built successfully${NC}"
+if [[ "$INSTALL_SERVICE" == "true" ]]; then
+    log_step "Building Rust service ($BUILD_MODE mode)..."
+    cd "$PROJECT_ROOT/service"
 
-# Install service binary
-echo -e "\n${YELLOW}Installing service binary...${NC}"
-sudo install -Dm755 target/release/kairpodsd /usr/bin/kairpodsd
-echo -e "${GREEN}✓ Service binary installed${NC}"
+    if [[ "$BUILD_MODE" == "release" ]]; then
+        cargo build --release --locked
+        BINARY_PATH="target/release/$SERVICE_ID"
+    else
+        cargo build
+        BINARY_PATH="target/debug/$SERVICE_ID"
+    fi
 
-# Install systemd user service
-echo -e "\n${YELLOW}Installing systemd service...${NC}"
-mkdir -p ~/.config/systemd/user/
-install -Dm644 systemd/user/kairpodsd.service ~/.config/systemd/user/
-systemctl --user daemon-reload
-echo -e "${GREEN}✓ Systemd service installed${NC}"
+    log_info "✓ Service built successfully"
 
-# Install plasmoid
-echo -e "\n${YELLOW}Installing Plasma widget...${NC}"
-cd "$PROJECT_ROOT"
-kpackagetool6 --type Plasma/Applet --install plasmoid || \
-    kpackagetool6 --type Plasma/Applet --upgrade plasmoid
-echo -e "${GREEN}✓ Plasma widget installed${NC}"
+    # Install service binary
+    log_step "Installing service binary..."
+    sudo install -Dm755 "$BINARY_PATH" "$PREFIX/bin/$SERVICE_ID"
+    log_info "✓ Service binary installed"
+    
+    # Set capabilities if bluetooth group doesn't exist
+    if [[ "$SET_CAPABILITIES" == "true" ]]; then
+        log_step "Setting capabilities for Bluetooth access..."
+        sudo setcap 'cap_net_raw,cap_net_admin+eip' "$PREFIX/bin/$SERVICE_ID" || {
+            log_warn "Failed to set capabilities - service may have limited functionality"
+        }
+        log_info "✓ Capabilities set for raw socket access"
+    fi
 
-# Enable and start service
-echo -e "\n${YELLOW}Starting service...${NC}"
-systemctl --user enable kairpodsd
-systemctl --user restart kairpodsd
+    # Install systemd user service
+    log_step "Installing systemd service..."
+    mkdir -p "$HOME/.config/systemd/user/"
+    install -Dm644 "systemd/user/${SERVICE_ID}.service" "$HOME/.config/systemd/user/"
+    systemctl --user daemon-reload
+    log_info "✓ Systemd service installed"
+    
+    # Return to project root
+    cd "$PROJECT_ROOT"
 
-# Check service status
-if systemctl --user is-active --quiet kairpodsd; then
-    echo -e "${GREEN}✓ Service is running${NC}"
-else
-    echo -e "${RED}⚠ Service failed to start. Check logs with:${NC}"
-    echo "  journalctl --user -u kairpodsd -f"
+    # Enable and start service
+    log_step "Starting service..."
+    systemctl --user enable --now "$SERVICE_ID"
+
+    # Check service status
+    sleep 1
+    if systemctl --user is-active --quiet "$SERVICE_ID"; then
+        log_info "✓ Service is running"
+    else
+        log_error "Service failed to start. Check logs with:"
+        echo "  journalctl --user -u $SERVICE_ID -f"
+        echo -e "\n${YELLOW}Common issues:${NC}"
+        echo "- Ensure you're in the bluetooth group (see above)"
+        echo "- Make sure Bluetooth is enabled"
+        echo "- Check that AirPods are paired via KDE settings"
+    fi
 fi
 
-echo -e "\n${GREEN}Installation complete!${NC}"
+# Install plasmoid
+if [[ "$INSTALL_WIDGET" == "true" ]]; then
+    log_step "Installing Plasma widget..."
+    cd "$PROJECT_ROOT"
+    kpackagetool6 --type Plasma/Applet --install plasmoid 2>/dev/null || \
+        kpackagetool6 --type Plasma/Applet --upgrade plasmoid
+    log_info "✓ Plasma widget installed"
+fi
+
+# Final message
+echo
+log_info "Installation complete!"
 echo -e "\nTo add the widget to your panel:"
 echo "1. Right-click on your Plasma panel"
 echo "2. Select 'Add Widgets'"
 echo "3. Search for 'kAirPods'"
 echo "4. Drag the widget to your panel"
 
-echo -e "\n${YELLOW}Note:${NC} Make sure your AirPods are already paired via KDE Bluetooth settings."
+echo -e "\n${YELLOW}Important:${NC}"
+echo "- Make sure your AirPods are already paired via KDE Bluetooth settings"
+if [[ "${NEED_RELOGIN:-false}" == "true" ]]; then
+    log_warn "You need to log out and back in for bluetooth group changes to take effect!"
+fi
+
+# Cleanup sudo keep-alive
+[[ -n ${SUDO_PID:-} ]] && kill "$SUDO_PID" 2>/dev/null || true

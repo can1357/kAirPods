@@ -2,84 +2,246 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![KDE Plasma 6](https://img.shields.io/badge/KDE%20Plasma-6-blue)](https://kde.org/plasma-desktop/)
-[![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![CI](https://github.com/can1357/kAirPods/actions/workflows/ci.yml/badge.svg)](https://github.com/can1357/kAirPods/actions/workflows/ci.yml)[![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 
-Native AirPods integration for KDE Plasma 6 with a modern, fast Rust backend.
+Native **AirPods®** integration for **KDE Plasma 6** powered by a modern, low-latency Rust backend.
 
-![kAirPods Screenshot](screenshot.png)
+<p align="center">
+  <img src="screenshot.png" width="300" alt="kAirPods panel widget showing battery levels and controls"/>
+</p>
 
-## Features
+---
 
-- **Real-time battery monitoring** for AirPods, case, and individual earbuds
-- **Noise control** switching between ANC, Transparency, and Off modes
-- **Ear detection** status and control
-- **Native Plasma integration** with panel widget
-- **Low-level Bluetooth L2CAP** communication for minimal latency
-- **D-Bus service architecture** for system-wide availability
+## ✨ Features
 
-## Architecture
+- 🔋 **Real-time battery monitoring** for AirPods, case, and individual earbuds
+- 🔇 **Noise control** switching between ANC, Transparency, and Off modes
+- 👂 **Ear detection** status and control
+- 🎨 **Native Plasma integration** with theme-aware panel widget
+- ⚡ **Zero-lag Bluetooth L2CAP** communication for instant updates
+- 🔧 **System-wide D-Bus service** architecture (no root required)
 
-- **Backend**: Rust D-Bus service (`kairpodsd`) handling Bluetooth L2CAP communication
-- **Frontend**: QML Plasmoid with modern UI components
-- **IPC**: D-Bus interface at `org.kairpods.manager`
+---
 
-## Quick Start
+## 🚀 Quick Install
+
+### One-liner install (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/can1357/kAirPods/master/scripts/get.sh | bash
+```
+
+### Manual install
 
 ```bash
 # Clone the repository
 git clone https://github.com/can1357/kAirPods.git
 cd kairpods
 
-# Build and install
+# Run the automated installer
 ./scripts/install.sh
-
-# The service will start automatically via systemd
 ```
 
-## D-Bus Interface
+The installer will:
 
-### Methods
+- ✅ Check all prerequisites and dependencies
+- ✅ Add you to the `bluetooth` group (if it exists)
+- ✅ Build the Rust service in release mode
+- ✅ Install all components system-wide
+- ✅ Start the service via systemd
+- ✅ Guide you through adding the widget
 
-- `GetDevices() → s` - Returns JSON array of all connected AirPods
-- `GetDevice(address: s) → s` - Returns JSON state of specific device
-- `SendCommand(address: s, action: s, params: a{sv}) → b` - Send commands to device
-- `ConnectDevice(address: s) → b` - Connect to AirPods
-- `DisconnectDevice(address: s) → b` - Disconnect from AirPods
+---
 
-### Signals
+## 📋 Prerequisites
 
-- `BatteryUpdated(address: s, battery: s)` - Battery level changes
-- `NoiseControlChanged(address: s, mode: s)` - Noise control mode changes
-- `DeviceConnected(address: s)` - Device connection events
-- `DeviceDisconnected(address: s)` - Device disconnection events
+| Component          | Minimum Version | Notes                              |
+| ------------------ | --------------- | ---------------------------------- |
+| **KDE Plasma**     | 6.0             | Required for widget support        |
+| **Rust toolchain** | 1.88+           | [Install Rust](https://rustup.rs/) |
+| **BlueZ**          | 5.50+           | Bluetooth stack                    |
+| **Linux Kernel**   | 5.10+           | L2CAP socket support               |
+| **systemd**        | 247+            | User services support              |
+| **D-Bus**          | 1.12+           | IPC communication                  |
 
-### Example Usage
+### 📦 Development Packages
+
+<details>
+<summary><b>Debian/Ubuntu</b></summary>
+
+```bash
+sudo apt install build-essential pkg-config libdbus-1-dev libbluetooth-dev
+```
+
+</details>
+
+<details>
+<summary><b>Fedora</b></summary>
+
+```bash
+sudo dnf install gcc pkg-config dbus-devel bluez-libs-devel
+```
+
+</details>
+
+<details>
+<summary><b>Arch Linux</b></summary>
+
+```bash
+sudo pacman -S base-devel pkgconf dbus bluez-libs
+```
+
+</details>
+
+---
+
+## 🎯 Getting Started
+
+### 1️⃣ **Pair Your AirPods**
+
+First, pair your AirPods through KDE System Settings → Bluetooth
+
+### 2️⃣ **Install kAirPods**
+
+```bash
+./scripts/install.sh
+```
+
+### 3️⃣ **Add the Widget**
+
+- Right-click on your Plasma panel
+- Select "Add Widgets"
+- Search for "kAirPods"
+- Drag to panel
+
+### 4️⃣ **Enjoy!**
+
+Click the widget to see battery levels and control your AirPods
+
+---
+
+## 🛠️ Troubleshooting
+
+<details>
+<summary><b>Service won't start / No devices detected</b></summary>
+
+1. **Check bluetooth group** (installer handles this automatically):
+
+   ```bash
+   groups | grep bluetooth
+   ```
+
+2. **Check service logs**:
+
+   ```bash
+   systemctl --user status kairpodsd
+   journalctl --user -u kairpodsd -f
+   ```
+
+3. **Ensure AirPods are paired** via KDE Bluetooth settings first
+</details>
+
+<details>
+<summary><b>Permission denied errors</b></summary>
+
+- The installer automatically adds you to the bluetooth group
+- If you still have issues, try: `sudo setcap cap_net_raw+ep /usr/bin/kairpodsd`
+</details>
+
+<details>
+<summary><b>Widget not showing up</b></summary>
+
+- Restart plasmashell: `systemctl --user restart plasma-plasmashell`
+- Or simply log out and back in
+</details>
+
+---
+
+## 🏗️ Architecture
+
+```
+                             ┌─────────────────────────┐
+                             │      Plasma Widget      │
+                             │  (Kirigami / QML UI)    │
+                             └───────────▲─────────────┘
+                                         │  D-Bus IPC
+                                         │
+┌───────────────────────┐   manages   ┌──▼────────────────┐
+│   plasmashell (GUI)   │◀────────────│   kairpodsd       │
+│  + panel & widgets    │  systemd-u  │  (Rust service)   │
+└───────────────────────┘             └──┬────────────────┘
+                                         │  Bluetooth L2CAP
+                                         │
+                                   ┌─────▼───────┐
+                                   │  AirPods    │
+                                   └─────────────┘
+
+```
+
+- **Backend**: High-performance Rust service (`kairpodsd`) with direct L2CAP access
+- **Frontend**: QML Plasmoid with Kirigami components
+- **IPC**: D-Bus interface at `org.kairpods.manager`
+
+---
+
+## 🔌 D-Bus API
+
+For developers and power users:
 
 ```bash
 # List connected devices
 busctl --user call org.kairpods /org/kairpods/manager \
     org.kairpods.manager GetDevices
 
-# Set noise control to ANC
+# Control noise mode
 busctl --user call org.kairpods /org/kairpods/manager \
     org.kairpods.manager SendCommand "ss" "AA:BB:CC:DD:EE:FF" "set_noise_mode" 1 "value" "s" "anc"
-
-# Monitor battery updates
-busctl --user monitor org.kairpods
 ```
 
-## Requirements
+<details>
+<summary><b>Full API Reference</b></summary>
 
-- KDE Plasma 6
-- Rust toolchain
-- BlueZ 5.50+
-- D-Bus
-- systemd (user services)
+### Methods
 
-## License
+- `GetDevices() → s` - Returns JSON array of all connected AirPods
+- `GetDevice(address: s) → s` - Returns JSON state of specific device
+- `SendCommand(address: s, action: s, params: a{sv}) → b` - Send commands
+- `ConnectDevice(address: s) → b` - Connect to AirPods
+- `DisconnectDevice(address: s) → b` - Disconnect from AirPods
 
-This project is licensed under the GNU General Public License v3.0 or later - see the [LICENSE](LICENSE) file for details.
+### Signals
 
-## Contributing
+- `BatteryUpdated(address: s, battery: s)` - Battery level changes
+- `NoiseControlChanged(address: s, mode: s)` - Noise control changes
+- `DeviceConnected(address: s)` - Connection events
+- `DeviceDisconnected(address: s)` - Disconnection events
+</details>
+
+---
+
+## 🗑️ Uninstalling
+
+```bash
+./scripts/install.sh --uninstall
+```
+
+Or with curl:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/can1357/kAirPods/master/scripts/get.sh | bash -s -- --uninstall
+```
+
+---
+
+## 📄 License
+
+This project is licensed under the **GNU General Public License v3.0** or later.  
+See the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+For more details on manual installation, advanced configuration, or packaging for distributions, see [INSTALL.md](INSTALL.md).

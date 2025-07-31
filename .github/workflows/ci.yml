@@ -40,10 +40,10 @@ jobs:
           # Check that required files exist
           test -f plasmoid/metadata.json
           test -f plasmoid/contents/ui/main.qml
-          
+
           # Validate metadata.json
           jq . plasmoid/metadata.json
-          
+
           # List all QML files
           find plasmoid -name "*.qml" -type f
 
@@ -121,6 +121,6 @@ jobs:
           test -f plasmoid/metadata.json
           test -f plasmoid/contents/ui/main.qml
           jq . plasmoid/metadata.json >/dev/null
-          for f in scripts/install.sh scripts/uninstall.sh; do
+          for f in scripts/install.sh scripts/get.sh; do
             [ -x "$f" ] || { echo "$f must be +x"; exit 1; }
           done

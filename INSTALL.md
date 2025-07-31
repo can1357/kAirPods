@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - KDE Plasma 6 or later
-- Rust toolchain (1.70+)
+- Rust toolchain (1.88+)
 - BlueZ 5.50 or later
 - systemd (for user services)
 - Development packages:
@@ -107,14 +107,29 @@ This will build and install all components automatically.
 
 ## Uninstalling
 
+### Automated Uninstall
+
+The easiest way is to use the installer script:
+
+```bash
+./scripts/install.sh --uninstall
+```
+
+### Manual Uninstall
+
+If you need to manually remove kAirPods:
+
 ```bash
 # Stop and disable service
 systemctl --user stop kairpodsd
 systemctl --user disable kairpodsd
 
-# Remove files
+# Remove service files
 sudo rm /usr/bin/kairpodsd
 rm ~/.config/systemd/user/kairpodsd.service
+
+# Reload systemd
+systemctl --user daemon-reload
 
 # Remove plasmoid
 kpackagetool6 --type Plasma/Applet --remove org.kairpods.plasma

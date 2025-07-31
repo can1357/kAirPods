@@ -15,7 +15,7 @@ Thank you for your interest in contributing to kAirPods! This document provides 
 
 ### Prerequisites
 
-- Rust 1.70+
+- Rust 1.88+
 - KDE Plasma 6 development packages
 - Qt 6.5+ development tools
 - BlueZ development headers

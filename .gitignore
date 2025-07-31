@@ -1,6 +1,5 @@
 # Rust
 /service/target/
-/service/Cargo.lock
 **/*.rs.bk
 *.pdb
 **/*.d
