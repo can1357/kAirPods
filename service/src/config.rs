@@ -6,6 +6,7 @@
 use std::{env, fs, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
+use smol_str::SmolStr;
 
 use crate::error::{AirPodsError, Result};
 
@@ -26,6 +27,9 @@ pub struct Config {
 
    #[serde(default = "default_notification_retries")]
    pub notification_retries: u32,
+
+   #[serde(default)]
+   pub log_filter: Option<SmolStr>,
 }
 
 /// Represents a known `AirPods` device.
@@ -59,6 +63,7 @@ impl Default for Config {
          connection_retry_count: default_retry_count(),
          reconnect_delay_sec: default_reconnect_delay(),
          notification_retries: default_notification_retries(),
+         log_filter: None,
       }
    }
 }
@@ -95,26 +100,15 @@ impl Config {
    }
 
    fn config_path() -> Result<PathBuf> {
-      static PATHS: &[(&str, Option<&str>)] = &[
-         ("AIRPODS_HOME", None),
-         ("XDG_CONFIG_HOME", None),
-         ("HOME", Some(".config")),
-      ];
-      Ok(PATHS
-         .iter()
-         .find_map(|(var, sub)| {
-            if let Ok(value) = env::var(var) {
-               let mut pb = PathBuf::from(value);
-               if let Some(sub) = sub {
-                  pb.push(sub);
-               }
-               Some(pb)
-            } else {
-               None
-            }
-         })
+      // Check for override environment variable first
+      if let Ok(path) = env::var("AIRPODS_CONFIG_PATH") {
+         return Ok(PathBuf::from(path));
+      }
+
+      // Use dirs crate to get the proper config directory
+      Ok(dirs::config_dir()
          .ok_or(AirPodsError::ConfigDirNotFound)?
-         .join("airpods-service")
+         .join("kairpods")
          .join("config.toml"))
    }
 

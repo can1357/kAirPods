@@ -16,32 +16,78 @@ use dbus::AirPodsService;
 use event::{AirPodsEvent, EventBus};
 
 mod airpods;
+mod battery_study;
 mod bluetooth;
 mod config;
 mod dbus;
 mod error;
 mod event;
+mod ringbuf;
 
 use crate::{airpods::device::AirPods, dbus::AirPodsServiceSignals, error::Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-   env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+   // Parse command line arguments
+   let args: Vec<String> = std::env::args().collect();
+   if args.len() > 1 {
+      match args[1].as_str() {
+         "--version" | "-v" => {
+            println!("kairpodsd {}", env!("CARGO_PKG_VERSION"));
+            return Ok(());
+         },
+         "--help" | "-h" => {
+            println!("Usage: {} [OPTIONS]", args[0]);
+            println!();
+            println!("Options:");
+            println!("  -v, --version    Print version information and exit");
+            println!("  -h, --help       Print this help message and exit");
+            return Ok(());
+         },
+         arg => {
+            eprintln!("Unknown argument: {arg}");
+            eprintln!("Try '{} --help' for more information.", args[0]);
+            std::process::exit(1);
+         },
+      }
+   }
 
+   let (config, config_err) = match config::Config::load() {
+      Ok(config) => (config, None),
+      Err(e) => (config::Config::default(), Some(e)),
+   };
+
+   let default_filter = config.log_filter.as_deref().unwrap_or("info");
+   env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(default_filter))
+      .init();
    info!("Starting kAirPods D-Bus service...");
 
-   // Load configuration
-   let config = config::Config::load()?;
-   info!(
-      "Loaded configuration with {} known devices",
-      config.known_devices.len()
-   );
+   if let Some(err) = config_err {
+      warn!("Failed to load configuration: {err:?}");
+   } else {
+      info!(
+         "Loaded configuration with {} known devices",
+         config.known_devices.len()
+      );
+   }
 
    // Create event channel
    let event_bus = EventProcessor::new();
 
+   // Initialize battery study database
+   let battery_study = match battery_study::BatteryStudy::open() {
+      Ok(study) => {
+         info!("Battery study database initialized");
+         Some(study)
+      },
+      Err(e) => {
+         warn!("Failed to initialize battery study database: {e}");
+         None
+      },
+   };
+
    // Create Bluetooth manager with event sender and config
-   let bluetooth_manager = BluetoothManager::new(event_bus.clone(), config).await?;
+   let bluetooth_manager = BluetoothManager::new(event_bus.clone(), config, battery_study).await?;
 
    // Create D-Bus service
    let service = AirPodsService::new(bluetooth_manager);

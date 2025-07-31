@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt, str::FromStr};
 
 use bluer::Address;
 use log::info;
-use zbus::{interface, object_server::SignalEmitter, zvariant};
+use zbus::{fdo, interface, object_server::SignalEmitter, zvariant};
 
 use crate::{
    airpods::protocol::{FeatureId, NoiseControlMode},
@@ -19,13 +19,13 @@ impl AirPodsService {
    }
 }
 
-fn to_arg_error<T: fmt::Display>(e: T) -> zbus::fdo::Error {
-   zbus::fdo::Error::InvalidArgs(e.to_string())
+fn to_arg_error<T: fmt::Display>(e: T) -> fdo::Error {
+   fdo::Error::InvalidArgs(e.to_string())
 }
 
 #[interface(name = "org.kairpods.manager")]
 impl AirPodsService {
-   async fn get_devices(&self) -> zbus::fdo::Result<String> {
+   async fn get_devices(&self) -> fdo::Result<String> {
       let states: Vec<serde_json::Value> = self
          .bluetooth_manager
          .all_devices()
@@ -36,13 +36,13 @@ impl AirPodsService {
       Ok(serde_json::to_string(&states).unwrap())
    }
 
-   async fn get_device(&self, address: String) -> zbus::fdo::Result<String> {
+   async fn get_device(&self, address: String) -> fdo::Result<String> {
       let addr = Address::from_str(&address).map_err(to_arg_error)?;
       let dev = self.bluetooth_manager.get_device(addr).await?;
       Ok(dev.to_json().to_string())
    }
 
-   async fn passthrough(&self, address: String, packet: String) -> zbus::fdo::Result<bool> {
+   async fn passthrough(&self, address: String, packet: String) -> fdo::Result<bool> {
       let addr = Address::from_str(&address).map_err(to_arg_error)?;
       let dev = self.bluetooth_manager.get_device(addr).await?;
       let packet = hex::decode(packet).map_err(to_arg_error)?;
@@ -51,12 +51,12 @@ impl AirPodsService {
    }
 
    async fn send_command(
-      &mut self,
+      &self,
       address: String,
       action: String,
       params: HashMap<String, zvariant::Value<'_>>,
       #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
-   ) -> zbus::fdo::Result<bool> {
+   ) -> fdo::Result<bool> {
       let addr = Address::from_str(&address).map_err(to_arg_error)?;
 
       let dev = self.bluetooth_manager.get_device(addr).await?;
@@ -117,13 +117,13 @@ impl AirPodsService {
       Ok(true)
    }
 
-   async fn connect_device(&self, address: String) -> zbus::fdo::Result<bool> {
+   async fn connect_device(&self, address: String) -> fdo::Result<bool> {
       let addr = Address::from_str(&address).map_err(to_arg_error)?;
       self.bluetooth_manager.establish_aap(addr).await?;
       Ok(true)
    }
 
-   async fn disconnect_device(&self, address: String) -> zbus::fdo::Result<bool> {
+   async fn disconnect_device(&self, address: String) -> fdo::Result<bool> {
       let addr = Address::from_str(&address).map_err(to_arg_error)?;
       self.bluetooth_manager.disconnect_aap(addr).await?;
       Ok(true)

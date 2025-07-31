@@ -9,10 +9,7 @@ ExecStart=/usr/bin/kairpodsd
 Restart=on-failure
 RestartSec=5
 PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=read-only
 NoNewPrivileges=yes
-ReadWritePaths=/var/run/dbus
 
 [Install]
 WantedBy=default.target

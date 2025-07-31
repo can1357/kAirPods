@@ -3,7 +3,15 @@
 //! This module contains all the protocol-specific constants, packet
 //! definitions, and data structures for communicating with `AirPods` devices.
 
-use std::{fmt, num::NonZeroU8, str::FromStr, sync::LazyLock};
+use std::{
+   fmt,
+   num::NonZeroU8,
+   str::FromStr,
+   sync::{
+      LazyLock,
+      atomic::{AtomicU64, Ordering},
+   },
+};
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -74,6 +82,7 @@ pub enum BatteryStatus {
 
 /// Noise control modes supported by `AirPods`.
 #[derive(
+   Default,
    Debug,
    Clone,
    Copy,
@@ -85,9 +94,12 @@ pub enum BatteryStatus {
    strum::Display,
    strum::EnumString,
    strum::IntoStaticStr,
+   strum::EnumIter,
+   Hash,
 )]
 #[repr(u32)]
 pub enum NoiseControlMode {
+   #[default]
    #[strum(serialize = "off")]
    Off = 0x01,
    #[strum(serialize = "anc")]
@@ -101,6 +113,72 @@ pub enum NoiseControlMode {
 impl NoiseControlMode {
    pub fn to_str(self) -> &'static str {
       self.into()
+   }
+
+   pub const fn index(self) -> usize {
+      (self as usize) - 1 // NOTE: Fix if values change!
+   }
+   pub fn from_index(i: usize) -> Option<Self> {
+      Self::from_repr(i.checked_add(1)?.try_into().ok()?)
+   }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[repr(transparent)]
+#[serde(transparent)]
+pub struct NoiseControlMap<T> {
+   data: [Option<T>; 4], // 4 = to_index(NoiseControlMode::MAX) + 1
+}
+
+impl<T> Default for NoiseControlMap<T> {
+   fn default() -> Self {
+      Self {
+         data: Default::default(),
+      }
+   }
+}
+
+impl<T: fmt::Debug> fmt::Debug for NoiseControlMap<T> {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      let mut map = f.debug_map();
+      for (i, value) in self.data.iter().enumerate() {
+         let Some(value) = value else {
+            continue;
+         };
+         map.entry(&NoiseControlMode::from_index(i), &value);
+      }
+      map.finish()
+   }
+}
+
+impl<T> NoiseControlMap<T> {
+   pub const fn get(&self, mode: NoiseControlMode) -> Option<&T> {
+      let i = mode.index();
+      self.data[i].as_ref()
+   }
+
+   pub const fn insert(&mut self, mode: NoiseControlMode, value: T) -> Option<T> {
+      let i = mode.index();
+      self.data[i].replace(value)
+   }
+
+   pub fn get_or_insert_with(&mut self, mode: NoiseControlMode, f: impl FnOnce() -> T) -> &mut T {
+      let i = mode.index();
+      self.data[i].get_or_insert_with(f)
+   }
+
+   pub const fn remove(&mut self, mode: NoiseControlMode) -> Option<T> {
+      let i = mode.index();
+      self.data[i].take()
+   }
+
+   pub fn len(&self) -> usize {
+      self.data.iter().filter(|v| v.is_some()).count()
+   }
+
+   #[cfg(test)]
+   pub fn is_empty(&self) -> bool {
+      self.data.iter().all(|v| v.is_none())
    }
 }
 
@@ -130,6 +208,41 @@ impl FromStr for FeatureId {
          }
       }
       Err(strum::ParseError::VariantNotFound)
+   }
+}
+
+#[derive(Default)]
+pub struct FeatureBitmap([AtomicU64; 256 / 64]);
+
+impl fmt::Debug for FeatureBitmap {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      f.debug_set().entries(self.iter()).finish()
+   }
+}
+
+impl FeatureBitmap {
+   pub fn set(&self, feature: FeatureId, enabled: bool) -> bool {
+      let (idx, mask) = feature.bitpos();
+      let prev = if enabled {
+         self.0[idx].fetch_or(mask, Ordering::Relaxed)
+      } else {
+         self.0[idx].fetch_and(!mask, Ordering::Relaxed)
+      };
+      prev & mask != 0
+   }
+   pub fn get(&self, feature: FeatureId) -> bool {
+      let (idx, mask) = feature.bitpos();
+      self.0[idx].load(Ordering::Relaxed) & mask != 0
+   }
+   pub fn iter(&self) -> impl Iterator<Item = FeatureId> {
+      (0..=0xffu8).filter_map(move |i| {
+         let feature = FeatureId::from_id(i);
+         if self.get(feature) {
+            Some(feature)
+         } else {
+            None
+         }
+      })
    }
 }
 
@@ -213,11 +326,11 @@ impl BatteryState {
       }
    }
 
-   pub fn is_charging(&self) -> bool {
+   pub fn is_charging(self) -> bool {
       self.status == BatteryStatus::Charging
    }
 
-   pub fn is_available(&self) -> bool {
+   pub fn is_available(self) -> bool {
       self.status != BatteryStatus::Disconnected
    }
 }

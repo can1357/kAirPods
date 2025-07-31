@@ -21,6 +21,7 @@ use tokio::{
 
 use crate::{
    airpods::device::AirPods,
+   battery_study::BatteryStudy,
    config::Config,
    error::{AirPodsError, Result},
    event::{AirPodsEvent, EventSender},
@@ -39,6 +40,8 @@ const ADAPTER_RECOVERY_DELAY: Duration = Duration::from_secs(5);
 const AAP_CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
 /// Maximum AAP connection retry delay
 const MAX_AAP_RETRY_DELAY: Duration = Duration::from_secs(120);
+/// Device tick interval
+const DEVICE_TICK_INTERVAL: Duration = Duration::from_secs(10);
 /// Apple manufacturer ID
 const APPLE_MANUFACTURER_ID: u16 = 0x004C;
 /// Channel buffer size
@@ -124,9 +127,17 @@ pub struct BluetoothManager {
 }
 
 impl BluetoothManager {
-   pub async fn new(event_tx: EventSender, config: Config) -> Result<Self> {
+   pub async fn new(
+      event_tx: EventSender,
+      config: Config,
+      battery_study: Option<BatteryStudy>,
+   ) -> Result<Self> {
       let (command_tx, command_rx) = mpsc::channel(CHANNEL_BUFFER_SIZE);
-      tokio::spawn(ManagerActor::new(config, event_tx, command_rx).await.run());
+      tokio::spawn(
+         ManagerActor::new(config, event_tx, command_rx, battery_study)
+            .await
+            .run(),
+      );
       Ok(Self { inbox: command_tx })
    }
 
@@ -200,6 +211,7 @@ struct ManagerActor {
    loopback_rx: mpsc::Receiver<ManagerCommand>,
    loopback_tx: mpsc::Sender<ManagerCommand>,
    session: Session,
+   battery_study: Option<BatteryStudy>,
 
    // State
    adapters: HashMap<SmolStr, AdapterInfo>,
@@ -212,6 +224,7 @@ impl ManagerActor {
       config: Config,
       event_tx: EventSender,
       command_rx: mpsc::Receiver<ManagerCommand>,
+      battery_study: Option<BatteryStudy>,
    ) -> Self {
       let session = Session::new()
          .await
@@ -225,6 +238,7 @@ impl ManagerActor {
          loopback_rx,
          loopback_tx,
          session,
+         battery_study,
          adapters: HashMap::new(),
          devices: HashMap::new(),
          aap_connecting: HashSet::new(),
@@ -244,6 +258,9 @@ impl ManagerActor {
       let mut adapter_check_interval = time::interval(ADAPTER_CHECK_INTERVAL);
       adapter_check_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
+      let mut device_tick_interval = time::interval(DEVICE_TICK_INTERVAL);
+      device_tick_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
       // Main event loop
       loop {
          select! {
@@ -255,6 +272,10 @@ impl ManagerActor {
              _ = adapter_check_interval.tick() => {
                  // Check for new adapters
                  self.discover_new_adapters().await;
+             }
+             _ = device_tick_interval.tick() => {
+                 // Tick all devices
+                 self.tick_all_devices();
              }
              cmd = self.command_rx.recv() => {
                  let Some(cmd) = cmd else {
@@ -390,7 +411,7 @@ impl ManagerActor {
       })
    }
 
-   async fn check_connected_devices(&mut self, adapter_name: &SmolStr) {
+   async fn check_connected_devices(&self, adapter_name: &SmolStr) {
       let Some(adapter_info) = self.adapters.get(adapter_name) else {
          return;
       };
@@ -451,10 +472,10 @@ impl ManagerActor {
             self.handle_adapter_available(name, adapter).await;
          },
          ManagerCommand::AdapterLost(name) => {
-            self.handle_adapter_lost(name).await;
+            self.handle_adapter_lost(name);
          },
          ManagerCommand::AdapterError(name, error) => {
-            self.handle_adapter_error(name, error).await;
+            self.handle_adapter_error(&name, error);
          },
          ManagerCommand::DeviceDiscovered(addr, adapter_name) => {
             self.handle_device_discovered(addr, adapter_name).await;
@@ -463,16 +484,16 @@ impl ManagerActor {
             self.handle_bluetooth_connected(addr).await;
          },
          ManagerCommand::BluetoothDisconnected(addr) => {
-            self.handle_bluetooth_disconnected(addr).await;
+            self.handle_bluetooth_disconnected(addr);
          },
          ManagerCommand::AAPConnected(addr) => {
-            self.handle_aap_connected(addr).await;
+            self.handle_aap_connected(addr);
          },
          ManagerCommand::AAPDisconnected(addr, is_error) => {
-            self.handle_aap_disconnected(addr, is_error).await;
+            self.handle_aap_disconnected(addr, is_error);
          },
          ManagerCommand::DeviceLost(addr) => {
-            self.handle_device_lost(addr).await;
+            self.handle_device_lost(addr);
          },
          ManagerCommand::EstablishAAP(addr, reply) => {
             let result = self.establish_aap_connection(addr).await;
@@ -542,7 +563,7 @@ impl ManagerActor {
       }
    }
 
-   async fn handle_adapter_lost(&mut self, name: SmolStr) {
+   fn handle_adapter_lost(&mut self, name: SmolStr) {
       warn!("Adapter lost: {name}");
 
       if let Some(info) = self.adapters.get_mut(&name) {
@@ -596,10 +617,10 @@ impl ManagerActor {
       }
    }
 
-   async fn handle_adapter_error(&mut self, name: SmolStr, error: String) {
+   fn handle_adapter_error(&mut self, name: &SmolStr, error: String) {
       error!("Adapter error on {name}: {error}");
 
-      if let Some(info) = self.adapters.get_mut(&name) {
+      if let Some(info) = self.adapters.get_mut(name) {
          info.state = AdapterState::Failed(error);
       }
    }
@@ -638,7 +659,7 @@ impl ManagerActor {
       info!("Found connected AirPods: {name} ({addr})");
 
       // Create managed device
-      let airpods = AirPods::new(addr, name);
+      let airpods = AirPods::new(addr, name, self.battery_study.clone());
       let managed = ManagedDevice {
          device: airpods,
          bluetooth_state: BluetoothState::Connected,
@@ -683,7 +704,7 @@ impl ManagerActor {
       }
    }
 
-   async fn handle_bluetooth_disconnected(&mut self, addr: Address) {
+   fn handle_bluetooth_disconnected(&mut self, addr: Address) {
       if let Some(device) = self.devices.get_mut(&addr) {
          device.bluetooth_state = BluetoothState::Disconnected;
 
@@ -701,7 +722,7 @@ impl ManagerActor {
       self.aap_connecting.remove(&addr);
    }
 
-   async fn handle_aap_connected(&mut self, addr: Address) {
+   fn handle_aap_connected(&mut self, addr: Address) {
       if let Some(device) = self.devices.get_mut(&addr) {
          device.aap_state = AAPState::Connected;
          device.aap_retry_count = 0;
@@ -715,7 +736,7 @@ impl ManagerActor {
       self.aap_connecting.remove(&addr);
    }
 
-   async fn handle_aap_disconnected(&mut self, addr: Address, is_error: bool) {
+   fn handle_aap_disconnected(&mut self, addr: Address, is_error: bool) {
       if let Some(device) = self.devices.get_mut(&addr) {
          if is_error && device.bluetooth_state == BluetoothState::Connected {
             // Only retry AAP if Bluetooth is still connected
@@ -742,7 +763,7 @@ impl ManagerActor {
       self.aap_connecting.remove(&addr);
    }
 
-   async fn handle_device_lost(&mut self, addr: Address) {
+   fn handle_device_lost(&mut self, addr: Address) {
       if let Some(device) = self.devices.remove(&addr) {
          self
             .event_tx
@@ -915,7 +936,7 @@ impl ManagerActor {
                if let Ok(device) = adapter_info.adapter.device(addr) {
                   if device.is_connected().await.unwrap_or(false)
                      && self.is_airpods_device(&device).await
-                     && !self.has_aap_connection(&addr)
+                     && !self.has_aap_connection(addr)
                   {
                      // Found connected AirPods without AAP connection
                      let _ = self
@@ -932,11 +953,17 @@ impl ManagerActor {
       }
    }
 
-   fn has_aap_connection(&self, addr: &Address) -> bool {
+   fn has_aap_connection(&self, addr: Address) -> bool {
       self
          .devices
-         .get(addr)
+         .get(&addr)
          .is_some_and(|d| matches!(d.aap_state, AAPState::Connected | AAPState::Connecting))
+   }
+
+   fn tick_all_devices(&self) {
+      for device in self.devices.values() {
+         device.device.tick();
+      }
    }
 
    async fn check_connection_health(&self) {

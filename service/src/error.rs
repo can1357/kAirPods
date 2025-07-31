@@ -10,7 +10,7 @@ use bluer::Address;
 use thiserror::Error;
 use tokio::task::JoinError;
 
-use crate::airpods::parser;
+use crate::{airpods::parser, battery_study};
 
 /// Main error type for the `AirPods` service.
 #[derive(Error, Debug)]
@@ -74,6 +74,9 @@ pub enum AirPodsError {
 
    #[error("Adapter not available")]
    AdapterNotAvailable,
+
+   #[error("Battery study error: {0}")]
+   BatteryStudy(#[from] battery_study::Error),
 }
 
 /// Convenience type alias for Results with `AirPodsError`.
