@@ -1,0 +1,39 @@
+# Set default behavior to automatically normalize line endings
+* text=auto
+
+# Force Unix line endings for shell scripts
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Force Unix line endings for other script files
+*.py text eol=lf
+*.pl text eol=lf
+*.rb text eol=lf
+
+# Force Unix line endings for configuration files
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+Dockerfile text eol=lf
+.dockerignore text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Rust files
+*.rs text eol=lf
+Cargo.toml text eol=lf
+Cargo.lock text eol=lf
+
+# QML and JavaScript files
+*.qml text eol=lf
+*.js text eol=lf
+
+# Binary files (don't modify)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary

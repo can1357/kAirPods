@@ -37,14 +37,27 @@ Card {
                 spacing: Kirigami.Units.largeSpacing
                 Layout.fillWidth: true
 
+                // Single headphone battery (AirPods Max)
+                CircularBatteryIndicator {
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignCenter
+                    visible: !!device?.battery?.headphone
+                    label: i18n("MX")
+                    level: device?.battery?.headphone?.level ?? 0
+                    charging: !!device?.battery?.headphone?.charging
+                    size: Kirigami.Units.gridUnit * 3.5
+                    showEarStatus: true
+                    inEar: !(!device?.ear_detection?.left_in_ear && !device?.ear_detection?.right_in_ear)
+                }
+
                 // Left AirPod
                 CircularBatteryIndicator {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignCenter
-                    visible: !!device?.battery?.left_available
+                    visible: !!device?.battery?.left && !device?.battery?.headphone
                     label: i18n("L")
-                    level: device?.battery?.left_level ?? 0
-                    charging: !!device?.battery?.left_charging
+                    level: device?.battery?.left?.level ?? 0
+                    charging: !!device?.battery?.left?.charging
                     size: Kirigami.Units.gridUnit * 3.5
                     showEarStatus: true
                     inEar: !!device?.ear_detection?.left_in_ear
@@ -54,10 +67,10 @@ Card {
                 CircularBatteryIndicator {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignCenter
-                    visible: !!device?.battery?.right_available
+                    visible: !!device?.battery?.right && !device?.battery?.headphone
                     label: i18n("R")
-                    level: device?.battery?.right_level ?? 0
-                    charging: !!device?.battery?.right_charging
+                    level: device?.battery?.right?.level ?? 0
+                    charging: !!device?.battery?.right?.charging
                     size: Kirigami.Units.gridUnit * 3.5
                     showEarStatus: true
                     inEar: !!device?.ear_detection?.right_in_ear
@@ -70,10 +83,13 @@ Card {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: Kirigami.Units.smallSpacing
 
-                // Show only when estimate is available and neither bud is charging
+                // Show only when estimate is available and no component is charging
                 visible: {
                     const hasEstimate = device?.battery_ttl_estimate != null && device?.battery_ttl_estimate !== undefined
-                    const notCharging = !(device?.battery?.left_charging || device?.battery?.right_charging)
+                    const headphoneCharging = device?.battery?.headphone?.charging ?? false
+                    const leftCharging = device?.battery?.left?.charging ?? false
+                    const rightCharging = device?.battery?.right?.charging ?? false
+                    const notCharging = !(headphoneCharging || leftCharging || rightCharging)
                     return hasEstimate && notCharging
                 }
 

@@ -489,7 +489,8 @@ impl BatteryTracker {
       let prev_estimate = self.last_ttl_estimate;
 
       // Don't estimate if either bud is charging
-      if battery_info.left.is_charging() || battery_info.right.is_charging() {
+      let (left, right) = battery_info.split_ref();
+      if left.is_charging() || right.is_charging() {
          if prev_estimate.is_some() {
             debug!("Battery TTL estimation unavailable: AirPods are charging");
             self.last_ttl_estimate = None;
@@ -498,7 +499,7 @@ impl BatteryTracker {
       }
 
       // Don't estimate if either bud is disconnected
-      if !battery_info.left.is_available() || !battery_info.right.is_available() {
+      if !left.is_available() || !right.is_available() {
          if prev_estimate.is_some() {
             debug!("Battery TTL estimation unavailable: One or both buds disconnected");
             self.last_ttl_estimate = None;
@@ -557,7 +558,7 @@ impl BatteryTracker {
       }
 
       // Use the minimum battery level for conservative estimate
-      let min_level = f64::from(battery_info.left.level.min(battery_info.right.level));
+      let min_level = f64::from(left.level.min(right.level));
 
       // Calculate hours remaining
       let hours_remaining = min_level / drain_rate;
@@ -741,11 +742,12 @@ impl BatteryTracker {
       }
 
       // Check if neither bud is charging
-      if battery_info.left.is_charging() || battery_info.right.is_charging() {
+      let (left, right) = battery_info.split_ref();
+      if left.is_charging() || right.is_charging() {
          debug!(
             "should_save: AirPods are charging (left: {}, right: {})",
-            battery_info.left.is_charging(),
-            battery_info.right.is_charging()
+            left.is_charging(),
+            right.is_charging()
          );
          return false; // Don't save while charging
       }
@@ -997,6 +999,7 @@ mod tests {
             level: 80,
             status: BatteryStatus::Normal,
          },
+         headphone: BatteryState::new(),
       };
 
       // Should return None when charging
@@ -1051,6 +1054,7 @@ mod tests {
             level: 80,
             status: BatteryStatus::Normal,
          },
+         headphone: BatteryState::new(),
       };
 
       // Should return None with insufficient data
@@ -1096,6 +1100,7 @@ mod tests {
             level: 80,
             status: BatteryStatus::Normal,
          },
+         headphone: BatteryState::new(),
       };
 
       // Should be false with no samples

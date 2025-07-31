@@ -148,6 +148,7 @@ bus.add_signal_receiver(
 
 The `GetDevices` and `GetDevice` methods return JSON strings. Example:
 
+### AirPods Pro / Regular AirPods
 ```json
 [
   {
@@ -155,9 +156,10 @@ The `GetDevices` and `GetDevice` methods return JSON strings. Example:
     "name": "John's AirPods Pro",
     "model": "AirPods Pro",
     "battery": {
-      "left": 85,
-      "right": 90,
-      "case": 75
+      "left": {"level": 85, "charging": false},
+      "right": {"level": 90, "charging": false},
+      "case": {"level": 75, "charging": true},
+      "headphone": null
     },
     "noise_control": "anc",
     "ear_detection": {
@@ -168,6 +170,33 @@ The `GetDevices` and `GetDevice` methods return JSON strings. Example:
       "ear_detection": true,
       "noise_control": true,
       "spatial_audio": false
+    }
+  }
+]
+```
+
+### AirPods Max
+```json
+[
+  {
+    "address": "BB:CC:DD:EE:FF:AA",
+    "name": "John's AirPods Max",
+    "model": "AirPods Max",
+    "battery": {
+      "left": null,
+      "right": null,
+      "case": null,
+      "headphone": {"level": 95, "charging": false}
+    },
+    "noise_control": "transparency",
+    "ear_detection": {
+      "left": true,
+      "right": true
+    },
+    "features": {
+      "ear_detection": true,
+      "noise_control": true,
+      "spatial_audio": true
     }
   }
 ]

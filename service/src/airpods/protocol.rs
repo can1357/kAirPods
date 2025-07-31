@@ -54,6 +54,7 @@ pub const HDR_EAR_DETECTION: &[u8] = b"\x04\x00\x04\x00\x06\x00";
    strum::EnumString,
 )]
 pub enum Component {
+   Headphone = 0x01,
    Right = 0x02,
    Left = 0x04,
    Case = 0x08,
@@ -61,6 +62,7 @@ pub enum Component {
 
 /// Battery status for `AirPods` components.
 #[derive(
+   Default,
    Debug,
    Clone,
    Copy,
@@ -77,6 +79,7 @@ pub enum BatteryStatus {
    Normal = 0x00,
    Charging = 0x01,
    Discharging = 0x02,
+   #[default]
    Disconnected = 0x04,
 }
 
@@ -306,7 +309,7 @@ impl fmt::Display for FeatureId {
 }
 
 /// Battery state for a single `AirPods` component.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BatteryState {
    pub level: u8,
    pub status: BatteryStatus,
@@ -333,6 +336,17 @@ impl BatteryState {
    pub fn is_available(self) -> bool {
       self.status != BatteryStatus::Disconnected
    }
+
+   pub fn to_json(self) -> serde_json::Value {
+      if self.is_available() {
+         json!({
+            "level": u32::from(self.level),
+            "charging": self.is_charging(),
+         })
+      } else {
+         serde_json::Value::Null
+      }
+   }
 }
 
 /// Complete battery information for all `AirPods` components.
@@ -341,11 +355,16 @@ pub struct BatteryInfo {
    pub left: BatteryState,
    pub right: BatteryState,
    pub case: BatteryState,
+   pub headphone: BatteryState,
 }
 
 impl fmt::Display for BatteryInfo {
    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-      write!(f, "L:{} R:{} C:{}", self.left, self.right, self.case)
+      write!(
+         f,
+         "L:{} R:{} C:{} H:{}",
+         self.left, self.right, self.case, self.headphone
+      )
    }
 }
 
@@ -355,20 +374,24 @@ impl BatteryInfo {
          left: BatteryState::new(),
          right: BatteryState::new(),
          case: BatteryState::new(),
+         headphone: BatteryState::new(),
+      }
+   }
+
+   pub fn split_ref(&self) -> (&BatteryState, &BatteryState) {
+      if self.headphone.is_available() {
+         (&self.headphone, &self.headphone)
+      } else {
+         (&self.left, &self.right)
       }
    }
 
    pub fn to_json(self) -> serde_json::Value {
       json!({
-          "left_level": u32::from(self.left.level),
-          "right_level": u32::from(self.right.level),
-          "case_level": u32::from(self.case.level),
-          "left_charging": self.left.is_charging(),
-          "right_charging": self.right.is_charging(),
-          "case_charging": self.case.is_charging(),
-          "left_available": self.left.is_available(),
-          "right_available": self.right.is_available(),
-          "case_available": self.case.is_available(),
+          "left": self.left.to_json(),
+          "right": self.right.to_json(),
+          "case": self.case.to_json(),
+          "headphone": self.headphone.to_json(),
       })
    }
 }

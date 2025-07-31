@@ -148,6 +148,7 @@ pub fn parse_battery_status(data: &[u8]) -> Result<BatteryInfo> {
             Component::Left => battery_info.left = battery_state,
             Component::Right => battery_info.right = battery_state,
             Component::Case => battery_info.case = battery_state,
+            Component::Headphone => battery_info.headphone = battery_state,
          }
 
          /*if matches!(component, Component::Left | Component::Right) {
