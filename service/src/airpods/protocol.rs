@@ -186,12 +186,44 @@ impl<T> NoiseControlMap<T> {
 }
 
 pub const KNOWN_FEATURES: &[(u8, &str)] = &[
+   (FeatureId::MIC_MODE.id(), "mic_mode"),
+   (FeatureId::BUTTON_SEND_MODE.id(), "button_send_mode"),
    (FeatureId::NOISE_CONTROL.id(), "noise_control"),
+   (FeatureId::SINGLE_CLICK_MODE.id(), "single_click_mode"),
+   (FeatureId::DOUBLE_CLICK_MODE.id(), "double_click_mode"),
+   (FeatureId::CLICK_HOLD_MODE.id(), "click_hold_mode"),
+   (
+      FeatureId::DOUBLE_CLICK_INTERVAL.id(),
+      "double_click_interval",
+   ),
+   (FeatureId::CLICK_HOLD_INTERVAL.id(), "click_hold_interval"),
+   (
+      FeatureId::LISTENING_MODE_CONFIGS.id(),
+      "listening_mode_configs",
+   ),
    (FeatureId::ONE_BUD_ANC.id(), "one_bud_anc"),
-   (FeatureId::VOLUME_SWIPE.id(), "volume_swipe"),
+   (
+      FeatureId::CROWN_ROTATION_DIRECTION.id(),
+      "crown_rotation_direction",
+   ),
+   (FeatureId::AUTO_ANSWER_MODE.id(), "auto_answer_mode"),
+   (FeatureId::CHIME_VOLUME.id(), "chime_volume"),
    (FeatureId::VOLUME_INTERVAL.id(), "volume_interval"),
+   (
+      FeatureId::CALL_MANAGEMENT_CONFIG.id(),
+      "call_management_config",
+   ),
+   (FeatureId::VOLUME_SWIPE.id(), "volume_swipe"),
    (FeatureId::ADAPTIVE_VOLUME.id(), "adaptive_volume"),
+   (FeatureId::SOFTWARE_MUTE.id(), "software_mute"),
    (FeatureId::CONVERSATIONAL.id(), "conversational"),
+   (FeatureId::SSL.id(), "ssl"),
+   (FeatureId::HEARING_AID_SETTINGS.id(), "hearing_aid_settings"),
+   (FeatureId::AUTO_ANC_STRENGTH.id(), "auto_anc_strength"),
+   (FeatureId::HPS_GAIN_SWIPE.id(), "hps_gain_swipe"),
+   (FeatureId::HRM.id(), "hrm"),
+   (FeatureId::IN_CASE_TONE.id(), "in_case_tone"),
+   (FeatureId::SIRI_MULTITONE.id(), "siri_multitone"),
    (FeatureId::HEARING_ASSIST.id(), "hearing_assist"),
    (FeatureId::ALLOW_OFF.id(), "allow_off"),
 ];
@@ -261,12 +293,45 @@ static U8_TO_HEX: LazyLock<[[u8; 2]; 256]> = LazyLock::new(|| {
 });
 
 impl FeatureId {
+   // Audio Control
+   pub const MIC_MODE: Self = Self(0x01);
    pub const NOISE_CONTROL: Self = Self(0x0D);
+
+   // Button Configuration
+   pub const BUTTON_SEND_MODE: Self = Self(0x05);
+   pub const SINGLE_CLICK_MODE: Self = Self(0x14);
+   pub const DOUBLE_CLICK_MODE: Self = Self(0x15);
+   pub const CLICK_HOLD_MODE: Self = Self(0x16);
+   pub const DOUBLE_CLICK_INTERVAL: Self = Self(0x17);
+   pub const CLICK_HOLD_INTERVAL: Self = Self(0x18);
+
+   // Listening Mode
+   pub const LISTENING_MODE_CONFIGS: Self = Self(0x1A);
    pub const ONE_BUD_ANC: Self = Self(0x1B);
-   pub const VOLUME_SWIPE: Self = Self(0x25);
+
+   // Crown Control (AirPods Max)
+   pub const CROWN_ROTATION_DIRECTION: Self = Self(0x1C);
+
+   // Call Features
+   pub const AUTO_ANSWER_MODE: Self = Self(0x1E);
+   pub const CALL_MANAGEMENT_CONFIG: Self = Self(0x24);
+
+   // Audio Settings
+   pub const CHIME_VOLUME: Self = Self(0x1F);
    pub const VOLUME_INTERVAL: Self = Self(0x23);
+   pub const VOLUME_SWIPE: Self = Self(0x25);
    pub const ADAPTIVE_VOLUME: Self = Self(0x26);
+   pub const SOFTWARE_MUTE: Self = Self(0x27);
+
+   // Advanced Features
    pub const CONVERSATIONAL: Self = Self(0x28);
+   pub const SSL: Self = Self(0x29);
+   pub const HEARING_AID_SETTINGS: Self = Self(0x2C);
+   pub const AUTO_ANC_STRENGTH: Self = Self(0x2E);
+   pub const HPS_GAIN_SWIPE: Self = Self(0x2F);
+   pub const HRM: Self = Self(0x30); // Heart Rate Monitor
+   pub const IN_CASE_TONE: Self = Self(0x31);
+   pub const SIRI_MULTITONE: Self = Self(0x32);
    pub const HEARING_ASSIST: Self = Self(0x33);
    pub const ALLOW_OFF: Self = Self(0x34);
 

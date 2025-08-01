@@ -159,6 +159,62 @@ Click the widget to see battery levels and control your AirPods
 - Or simply log out and back in
 </details>
 
+<details>
+<summary><b>Battery not showing / Debug logging</b></summary>
+
+If your AirPods connect but battery information is missing, enable debug logging to help diagnose the issue:
+
+#### Method 1: Running manually with debug output
+
+1. **Stop the service**:
+   ```bash
+   systemctl --user stop kairpodsd.service
+   ```
+
+2. **Start in debug mode**:
+   ```bash
+   # Shows general debug info and all Bluetooth packets
+   RUST_LOG=kairpodsd=debug,kairpodsd::bluetooth::l2cap=trace kairpodsd
+   
+   # Or use the full path if needed
+   RUST_LOG=kairpodsd=debug,kairpodsd::bluetooth::l2cap=trace /usr/bin/kairpodsd
+   ```
+
+3. **Reproduce the issue**:
+   - Put your AirPods in your ears (or just open the case)
+   - Wait about 30 seconds for the handshake and first battery message
+   - Copy the terminal output (you can redact MAC addresses like AA:BB:CC:DD:EE:FF)
+
+#### Method 2: Using systemd with debug config
+
+1. **Create config file**:
+   ```bash
+   mkdir -p ~/.config/kairpods
+   echo 'log_filter = "debug"' > ~/.config/kairpods/config.toml
+   ```
+
+2. **Restart the service**:
+   ```bash
+   systemctl --user restart kairpodsd.service
+   ```
+
+3. **View logs**:
+   ```bash
+   journalctl --user -u kairpodsd.service -b --no-pager
+   ```
+
+The debug output will show:
+- Connection handshake details
+- All Bluetooth packet exchanges
+- Battery update messages (or lack thereof)
+- Any parsing errors or protocol issues
+
+Common causes for missing battery info:
+- BlueZ experimental features not enabled (installer handles this automatically)
+- Enhanced Retransmission Mode (ERTM) disabled
+- Outdated BlueZ version (need ≥ 5.50)
+</details>
+
 ---
 
 ## 🏗️ Architecture

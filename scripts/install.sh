@@ -230,6 +230,82 @@ if [[ ${#missing_deps[@]} -gt 0 ]]; then
 fi
 log_info "✓ All development dependencies present"
 
+# Enable BlueZ experimental features (required for AirPods battery info)
+enable_bluez_experimental() {
+    local cfg="/etc/bluetooth/main.conf"
+    local stamp
+    stamp="$(date +%Y%m%d_%H%M%S)"
+
+    # ini_set SECTION KEY VALUE FILE → edits in-place (adds section/key if missing)
+    ini_set() {
+        local section=$1 key=$2 value=$3 file=$4
+        local tmpfile=$(mktemp)
+
+        sudo cat "$file" | awk -v s="[$section]" -v k="$key" -v v="$value" '
+        BEGIN{found=0;done=0}
+        $0==s {print;found=1;next}
+        found && /^[[:space:]]*#?[[:space:]]*'"$key"'[[:space:]]*=/ {
+            sub(/^[[:space:]]*#?[[:space:]]*/, "")
+            sub(/=.*/, "= " v)
+            done=1
+        }
+        {print}
+        END {
+            if(!found){print s}
+            if(!done && found){print k " = " v}
+        }' > "$tmpfile" && sudo mv "$tmpfile" "$file"
+
+        local result=$?
+        rm -f "$tmpfile" 2>/dev/null || true
+        return $result
+    }
+
+    log_step "Checking BlueZ experimental features..."
+
+    # Skip if experimental already active (either in config or runtime)
+    if grep -qE '^[[:space:]]*Experimental[[:space:]]*=[[:space:]]*true' "$cfg" 2>/dev/null \
+       || systemctl show bluetooth -p ExecStart 2>/dev/null | grep -q -- '--experimental'; then
+        log_info "✓ BlueZ experimental features already enabled"
+        return 0
+    fi
+
+    # Check if config exists
+    if [[ ! -r "$cfg" ]]; then
+        log_warn "BlueZ config not found at $cfg"
+        log_info "Creating new config file..."
+        echo -e "[General]\nExperimental = true" | sudo tee "$cfg" > /dev/null
+        sudo chmod 644 "$cfg"
+    else
+        # Backup only if not already backed up
+        if [[ ! -e "$cfg.bak.$stamp" ]]; then
+            sudo cp -n "$cfg" "$cfg.bak.$stamp" 2>/dev/null &&
+                log_info "✓ Backed up config to $cfg.bak.$stamp"
+        fi
+
+        log_info "Enabling experimental features..."
+        ini_set General Experimental true "$cfg" || {
+            log_error "Failed to update $cfg"
+            return 1
+        }
+        log_info "✓ BlueZ experimental features enabled"
+    fi
+
+    # Restart only if bluetooth is running
+    if systemctl is-active --quiet bluetooth; then
+        log_info "Restarting bluetooth service..."
+        sudo systemctl restart bluetooth
+        sleep 2
+        if systemctl is-active --quiet bluetooth; then
+            log_info "✓ Bluetooth service restarted"
+        else
+            log_error "Failed to restart bluetooth service"
+            log_warn "Please manually restart with: sudo systemctl restart bluetooth"
+        fi
+    fi
+
+    log_warn "Note: You may need to re-pair your AirPods for changes to take effect"
+}
+
 # Check bluetooth group membership
 log_step "Checking bluetooth permissions..."
 BLUETOOTH_GROUP_EXISTS=false
@@ -252,6 +328,9 @@ else
     log_info "Will set capabilities on the binary for Bluetooth access"
     SET_CAPABILITIES=true
 fi
+
+# Enable BlueZ experimental features
+enable_bluez_experimental
 
 # Clean up old installation
 log_step "Checking for previous installation..."
@@ -336,6 +415,7 @@ if [[ "$INSTALL_SERVICE" == "true" ]]; then
     # Enable and start service
     log_step "Starting service..."
     systemctl --user enable --now "$SERVICE_ID"
+    systemctl --user restart "$SERVICE_ID"
 
     # Check service status
     sleep 1
