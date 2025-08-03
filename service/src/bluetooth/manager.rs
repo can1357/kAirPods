@@ -20,7 +20,7 @@ use tokio::{
 };
 
 use crate::{
-   airpods::device::AirPods,
+   airpods::{self, device::AirPods},
    battery_study::BatteryStudy,
    config::Config,
    error::{AirPodsError, Result},
@@ -28,8 +28,6 @@ use crate::{
 };
 use rand::Rng;
 
-/// Device name patterns to identify `AirPods` and compatible devices
-const AIRPOD_PATTERNS: &[&str] = &["AirPods", "Beats", "Powerbeats", "EarPods", "AirPods Max"];
 /// Interval to poll for new devices and check connection health
 const HEALTH_CHECK_INTERVAL: Duration = Duration::from_secs(5);
 /// Interval to check for new adapters
@@ -42,8 +40,6 @@ const AAP_CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_AAP_RETRY_DELAY: Duration = Duration::from_secs(120);
 /// Device tick interval
 const DEVICE_TICK_INTERVAL: Duration = Duration::from_secs(10);
-/// Apple manufacturer ID
-const APPLE_MANUFACTURER_ID: u16 = 0x004C;
 /// Channel buffer size
 const CHANNEL_BUFFER_SIZE: usize = 1000;
 
@@ -441,29 +437,7 @@ impl ManagerActor {
       if self.config.is_known_device(&addr.to_string()).is_some() {
          return true;
       }
-
-      // Check name patterns
-      if let Ok(Some(name)) = device.name().await {
-         if AIRPOD_PATTERNS.iter().any(|pat| name.contains(pat)) {
-            return true;
-         }
-      }
-
-      // Check alias (user-set name)
-      if let Ok(alias) = device.alias().await {
-         if AIRPOD_PATTERNS.iter().any(|pat| alias.contains(pat)) {
-            return true;
-         }
-      }
-
-      // Check manufacturer data for Apple
-      if let Ok(Some(man_data)) = device.manufacturer_data().await {
-         if man_data.contains_key(&APPLE_MANUFACTURER_ID) {
-            return true;
-         }
-      }
-
-      false
+      airpods::recognition::is_device_airpods(device).await
    }
 
    async fn handle_command(&mut self, cmd: ManagerCommand) -> bool {

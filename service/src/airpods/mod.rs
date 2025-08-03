@@ -6,3 +6,4 @@
 pub mod device;
 pub mod parser;
 pub mod protocol;
+pub mod recognition;

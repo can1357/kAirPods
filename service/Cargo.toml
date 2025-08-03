@@ -1,6 +1,6 @@
 [package]
 name = "kairpodsd"
-version = "0.1.5"
+version = "0.2.0"
 edition = "2024"
 
 authors = ["Can Boluk <me@can.ac>"]
@@ -36,6 +36,7 @@ rand = "0.8"
 strum = { version = "0.27", features = ["derive"] }
 heed = { version = "0.22", features = ["serde-bincode"] }
 dirs = "6.0"
+uuid = "1"
 
 [dev-dependencies]
 tempfile = "3.14"
