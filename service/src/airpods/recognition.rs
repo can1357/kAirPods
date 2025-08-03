@@ -84,16 +84,22 @@ pub async fn is_device_airpods(dev: &bluer::Device) -> bool {
    }
 
    // 4. Last-chance name/alias pattern matching
-   let mut haystack = format!(
-      "{}{}",
-      dev.name().await.ok().flatten().unwrap_or_default(),
-      dev.alias().await.ok().unwrap_or_default()
-   );
-   haystack.as_mut_str().make_ascii_lowercase();
-   for pattern in AIRPOD_PATTERNS {
-      if haystack.contains(pattern) {
-         log::debug!("AirPods detected via name pattern: {pattern}");
-         return true;
+   if let Ok(Some(mut name)) = dev.name().await {
+      name.make_ascii_lowercase();
+      for pattern in AIRPOD_PATTERNS {
+         if name.contains(pattern) {
+            log::debug!("AirPods detected via name pattern: {name} => {pattern}");
+            return true;
+         }
+      }
+   }
+   if let Ok(mut alias) = dev.alias().await {
+      alias.make_ascii_lowercase();
+      for pattern in AIRPOD_PATTERNS {
+         if alias.contains(pattern) {
+            log::debug!("AirPods detected via alias pattern: {alias} => {pattern}");
+            return true;
+         }
       }
    }
    false
