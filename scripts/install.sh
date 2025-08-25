@@ -172,9 +172,21 @@ if ! command -v cargo &>/dev/null; then
     exit 1
 fi
 
-RUST_VERSION=$(rustc --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "0.0.0")
+# Compare versions (returns 0 if $1 >= $2)
+version_ge() {
+    [ "$(printf '%s\n' "$2" "$1" | LC_ALL=C sort -V | head -n1)" = "$2" ]
+}
+
+# rustc must be present even if cargo exists
+RUST_VERSION="$(rustc --version 2>/dev/null | awk '{print $2}')"
+if [[ -z "${RUST_VERSION:-}" ]]; then
+    log_error "rustc not found in PATH (even though cargo is present). Ensure Rust is installed and PATH is configured."
+    exit 1
+fi
+
 REQUIRED_VERSION="1.88.0"
-if [[ "$(LC_ALL=C printf '%s\n' "$REQUIRED_VERSION" "$RUST_VERSION" | sort -V | head -n1)" != "$REQUIRED_VERSION" ]]; then
+
+if ! version_ge "$RUST_VERSION" "$REQUIRED_VERSION"; then
     log_error "Rust version $RUST_VERSION is too old. Minimum required: $REQUIRED_VERSION"
     exit 1
 fi
