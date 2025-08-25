@@ -77,8 +77,14 @@ jobs:
             libdbus-1-dev \
             libbluetooth-dev
 
+      - name: Pin Rust version for CI
+        run: |
+          echo '[toolchain]' > rust-toolchain.toml
+          echo 'channel = "1.88.0"' >> rust-toolchain.toml
+          echo 'components = ["rustfmt", "clippy"]' >> rust-toolchain.toml
+
       - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.88.0
         with:
           components: clippy, rustfmt
 

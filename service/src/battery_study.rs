@@ -629,10 +629,10 @@ impl BatteryTracker {
       // Check cache first
       {
          let cache = self.historical_cache.lock();
-         if let Some(&(rate, confidence, last_updated)) = cache.get(mode) {
-            if last_updated.elapsed() < CACHE_DURATION {
-               return Some((rate, confidence));
-            }
+         if let Some(&(rate, confidence, last_updated)) = cache.get(mode)
+            && last_updated.elapsed() < CACHE_DURATION
+         {
+            return Some((rate, confidence));
          }
       }
 
@@ -783,18 +783,17 @@ impl BatteryTracker {
    pub fn save_to_study(&mut self, address: Address, noise_mode: NoiseControlMode) {
       if let Some(ref study) = self.study {
          // Calculate drain rate from current session
-         if let Some((drain_rate, _alpha, sample_count)) = self.calculate_local_drain_rate() {
-            if sample_count >= 4 {
-               // Update drain rate statistics in the database
-               let _ =
-                  study.update_drain_rate(address, noise_mode, drain_rate, sample_count as u32);
-               info!(
-                  "Saved battery drain rate of {drain_rate:.1}%/hr for mode {noise_mode} with {sample_count} samples"
-               );
+         if let Some((drain_rate, _alpha, sample_count)) = self.calculate_local_drain_rate()
+            && sample_count >= 4
+         {
+            // Update drain rate statistics in the database
+            let _ = study.update_drain_rate(address, noise_mode, drain_rate, sample_count as u32);
+            info!(
+               "Saved battery drain rate of {drain_rate:.1}%/hr for mode {noise_mode} with {sample_count} samples"
+            );
 
-               // Clear cache for this mode to force refresh
-               self.historical_cache.lock().remove(noise_mode);
-            }
+            // Clear cache for this mode to force refresh
+            self.historical_cache.lock().remove(noise_mode);
          }
       }
 

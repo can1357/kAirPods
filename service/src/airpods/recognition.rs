@@ -54,33 +54,33 @@ fn check_manufacturer_data(data: &[u8]) -> bool {
 
 pub async fn is_device_airpods(dev: &bluer::Device) -> bool {
    // 1. Check modalias (most reliable for connected devices)
-   if let Ok(Some(modalias)) = dev.modalias().await {
-      if modalias.vendor == APPLE_VID && AIRPOD_PIDS.contains(&modalias.product) {
-         log::debug!(
-            "AirPods detected via modalias: vendor={:#06x}, product={:#06x}",
-            modalias.vendor,
-            modalias.product
-         );
-         return true;
-      }
+   if let Ok(Some(modalias)) = dev.modalias().await
+      && modalias.vendor == APPLE_VID
+      && AIRPOD_PIDS.contains(&modalias.product)
+   {
+      log::debug!(
+         "AirPods detected via modalias: vendor={:#06x}, product={:#06x}",
+         modalias.vendor,
+         modalias.product
+      );
+      return true;
    }
 
    // 2. Check manufacturer data (useful for advertising/unconnected devices)
-   if let Ok(Some(mfg_data)) = dev.manufacturer_data().await {
-      if let Some(apple_data) = mfg_data.get(&APPLE_CID) {
-         if check_manufacturer_data(apple_data) {
-            log::debug!("AirPods detected via manufacturer data");
-            return true;
-         }
-      }
+   if let Ok(Some(mfg_data)) = dev.manufacturer_data().await
+      && let Some(apple_data) = mfg_data.get(&APPLE_CID)
+      && check_manufacturer_data(apple_data)
+   {
+      log::debug!("AirPods detected via manufacturer data");
+      return true;
    }
 
    // 3. Check service UUIDs (not always present, but definitive when found)
-   if let Ok(Some(uuids)) = dev.uuids().await {
-      if uuids.iter().any(|u| APPLE_SERVICES.contains(u)) {
-         log::debug!("AirPods detected via Apple service UUID");
-         return true;
-      }
+   if let Ok(Some(uuids)) = dev.uuids().await
+      && uuids.iter().any(|u| APPLE_SERVICES.contains(u))
+   {
+      log::debug!("AirPods detected via Apple service UUID");
+      return true;
    }
 
    // 4. Last-chance name/alias pattern matching

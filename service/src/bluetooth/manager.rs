@@ -318,24 +318,24 @@ impl ManagerActor {
             info!("Initializing adapter: {name}");
 
             // Ensure adapter is powered on
-            if let Ok(powered) = adapter.is_powered().await {
-               if !powered {
-                  if let Err(e) = adapter.set_powered(true).await {
-                     warn!("Failed to power on adapter {name}: {e}");
-                     // Schedule retry
-                     let loopback = self.loopback_tx.clone();
-                     let name_clone = name.clone();
-                     let adapter_clone = adapter.clone();
-                     tokio::spawn(async move {
-                        time::sleep(ADAPTER_RECOVERY_DELAY).await;
-                        let _ = loopback
-                           .send(ManagerCommand::AdapterAvailable(name_clone, adapter_clone))
-                           .await;
-                     });
-                     return;
-                  }
-                  info!("Powered on adapter: {name}");
+            if let Ok(powered) = adapter.is_powered().await
+               && !powered
+            {
+               if let Err(e) = adapter.set_powered(true).await {
+                  warn!("Failed to power on adapter {name}: {e}");
+                  // Schedule retry
+                  let loopback = self.loopback_tx.clone();
+                  let name_clone = name.clone();
+                  let adapter_clone = adapter.clone();
+                  tokio::spawn(async move {
+                     time::sleep(ADAPTER_RECOVERY_DELAY).await;
+                     let _ = loopback
+                        .send(ManagerCommand::AdapterAvailable(name_clone, adapter_clone))
+                        .await;
+                  });
+                  return;
                }
+               info!("Powered on adapter: {name}");
             }
 
             // Start monitoring this adapter
@@ -658,15 +658,15 @@ impl ManagerActor {
       } else {
          // Check if this is a newly connected AirPods
          for (adapter_name, adapter_info) in &self.adapters {
-            if let Ok(device) = adapter_info.adapter.device(addr) {
-               if self.is_airpods_device(&device).await {
-                  // Discovered a new connected AirPods
-                  let _ = self
-                     .loopback_tx
-                     .send(ManagerCommand::DeviceDiscovered(addr, adapter_name.clone()))
-                     .await;
-                  return;
-               }
+            if let Ok(device) = adapter_info.adapter.device(addr)
+               && self.is_airpods_device(&device).await
+            {
+               // Discovered a new connected AirPods
+               let _ = self
+                  .loopback_tx
+                  .send(ManagerCommand::DeviceDiscovered(addr, adapter_name.clone()))
+                  .await;
+               return;
             }
          }
          false
@@ -907,20 +907,19 @@ impl ManagerActor {
          // Check all connected devices
          if let Ok(addresses) = adapter_info.adapter.device_addresses().await {
             for addr in addresses {
-               if let Ok(device) = adapter_info.adapter.device(addr) {
-                  if device.is_connected().await.unwrap_or(false)
-                     && self.is_airpods_device(&device).await
-                     && !self.has_aap_connection(addr)
-                  {
-                     // Found connected AirPods without AAP connection
-                     let _ = self
-                        .loopback_tx
-                        .send(ManagerCommand::DeviceDiscovered(
-                           addr,
-                           adapter_info.name.clone(),
-                        ))
-                        .await;
-                  }
+               if let Ok(device) = adapter_info.adapter.device(addr)
+                  && device.is_connected().await.unwrap_or(false)
+                  && self.is_airpods_device(&device).await
+                  && !self.has_aap_connection(addr)
+               {
+                  // Found connected AirPods without AAP connection
+                  let _ = self
+                     .loopback_tx
+                     .send(ManagerCommand::DeviceDiscovered(
+                        addr,
+                        adapter_info.name.clone(),
+                     ))
+                     .await;
                }
             }
          }
@@ -942,25 +941,25 @@ impl ManagerActor {
 
    async fn check_connection_health(&self) {
       for (addr, device) in &self.devices {
-         if let Some(adapter_info) = self.adapters.get(&device.adapter_name) {
-            if let Ok(bluer_device) = adapter_info.adapter.device(*addr) {
-               let is_connected = bluer_device.is_connected().await.unwrap_or(false);
+         if let Some(adapter_info) = self.adapters.get(&device.adapter_name)
+            && let Ok(bluer_device) = adapter_info.adapter.device(*addr)
+         {
+            let is_connected = bluer_device.is_connected().await.unwrap_or(false);
 
-               match (device.bluetooth_state, is_connected) {
-                  (BluetoothState::Connected, false) => {
-                     let _ = self
-                        .loopback_tx
-                        .send(ManagerCommand::BluetoothDisconnected(*addr))
-                        .await;
-                  },
-                  (BluetoothState::Disconnected, true) => {
-                     let _ = self
-                        .loopback_tx
-                        .send(ManagerCommand::BluetoothConnected(*addr))
-                        .await;
-                  },
-                  _ => {},
-               }
+            match (device.bluetooth_state, is_connected) {
+               (BluetoothState::Connected, false) => {
+                  let _ = self
+                     .loopback_tx
+                     .send(ManagerCommand::BluetoothDisconnected(*addr))
+                     .await;
+               },
+               (BluetoothState::Disconnected, true) => {
+                  let _ = self
+                     .loopback_tx
+                     .send(ManagerCommand::BluetoothConnected(*addr))
+                     .await;
+               },
+               _ => {},
             }
          }
       }
