@@ -28,6 +28,9 @@ pub struct Config {
    #[serde(default = "default_notification_retries")]
    pub notification_retries: u32,
 
+   #[serde(default = "default_export_bluez_battery")]
+   pub export_bluez_battery: bool,
+
    #[serde(default)]
    pub log_filter: Option<SmolStr>,
 }
@@ -55,6 +58,10 @@ const fn default_reconnect_delay() -> u64 {
    10
 }
 
+const fn default_export_bluez_battery() -> bool {
+   true
+}
+
 impl Default for Config {
    fn default() -> Self {
       Self {
@@ -63,6 +70,7 @@ impl Default for Config {
          connection_retry_count: default_retry_count(),
          reconnect_delay_sec: default_reconnect_delay(),
          notification_retries: default_notification_retries(),
+         export_bluez_battery: default_export_bluez_battery(),
          log_filter: None,
       }
    }
