@@ -459,6 +459,31 @@ impl BatteryInfo {
           "headphone": self.headphone.to_json(),
       })
    }
+
+   /// Aggregates component charge levels into a single percentage suitable for
+   /// reporting to standard power interfaces (e.g., BlueZ `Battery1.Percentage`).
+   ///
+   /// For over-ear headphones (AirPods Max), the headphone charge level is returned.
+   /// For dual earbuds, returns the minimum of the available left and right bud levels,
+   /// ensuring early warning when either earbud is depleted.
+   pub fn aggregate_percentage(&self) -> Option<u8> {
+      if self.headphone.is_available() {
+         Some(self.headphone.level)
+      } else {
+         match (self.left.is_available(), self.right.is_available()) {
+            (true, true) => Some(self.left.level.min(self.right.level)),
+            (true, false) => Some(self.left.level),
+            (false, true) => Some(self.right.level),
+            (false, false) => {
+               if self.case.is_available() {
+                  Some(self.case.level)
+               } else {
+                  None
+               }
+            },
+         }
+      }
+   }
 }
 
 /// Ear detection status for left and right `AirPods`.
@@ -532,3 +557,56 @@ impl FeatureCmd {
       }
    }
 }
+
+#[cfg(test)]
+mod tests {
+   use super::*;
+
+   #[test]
+   fn test_aggregate_percentage_headphone() {
+      let mut info = BatteryInfo::new();
+      info.headphone = BatteryState {
+         level: 85,
+         status: BatteryStatus::Normal,
+      };
+      assert_eq!(info.aggregate_percentage(), Some(85));
+   }
+
+   #[test]
+   fn test_aggregate_percentage_dual_earbuds_min() {
+      let mut info = BatteryInfo::new();
+      info.left = BatteryState {
+         level: 90,
+         status: BatteryStatus::Normal,
+      };
+      info.right = BatteryState {
+         level: 65,
+         status: BatteryStatus::Normal,
+      };
+      assert_eq!(info.aggregate_percentage(), Some(65));
+   }
+
+   #[test]
+   fn test_aggregate_percentage_single_earbud() {
+      let mut info = BatteryInfo::new();
+      info.left = BatteryState {
+         level: 75,
+         status: BatteryStatus::Normal,
+      };
+      assert_eq!(info.aggregate_percentage(), Some(75));
+
+      let mut info_right = BatteryInfo::new();
+      info_right.right = BatteryState {
+         level: 80,
+         status: BatteryStatus::Normal,
+      };
+      assert_eq!(info_right.aggregate_percentage(), Some(80));
+   }
+
+   #[test]
+   fn test_aggregate_percentage_empty() {
+      let info = BatteryInfo::new();
+      assert_eq!(info.aggregate_percentage(), None);
+   }
+}
+
