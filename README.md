@@ -307,6 +307,6 @@ See the [LICENSE](LICENSE) file for details.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please feel free to submit a Pull Request. Translators: see [Translating the widget](CONTRIBUTING.md#translating-the-widget).
 
 For more details on manual installation, advanced configuration, or packaging for distributions, see [INSTALL.md](INSTALL.md).

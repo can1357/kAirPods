@@ -27,7 +27,7 @@ Thank you for your interest in contributing to kAirPods! This document provides 
 cd service
 cargo build
 
-# Test the plasmoid
+# Test the plasmoid (untranslated; see "Translating the widget" for testing translations)
 cd ../plasmoid
 plasmoidviewer -a .
 ```
@@ -41,6 +41,35 @@ No special hardware is needed to investigate the protocol. On macOS, searching s
 Alternatively, capture Bluetooth packets with PacketLogger from Xcode's Additional Tools on macOS, or enable the HCI snoop log in Android Developer Options. Compare packets while toggling features to identify commands and values; this approach does not require reverse engineering experience.
 
 See the [maintainer's explanation](https://github.com/can1357/kAirPods/issues/8) for more detail.
+
+## Translating the widget
+
+Translations are gettext catalogs in `plasmoid/translate/`: `template.pot` lists every string, and each language has a `<lang>.po` file (`de.po`, `nl.po`, ...). Only `.po` files are committed; installers compile them with `plasmoid/translate/build.sh` into `plasmoid/contents/locale/<lang>/LC_MESSAGES/plasma_applet_org.kairpods.plasma.mo`, which is where Plasma looks for this widget's translations.
+
+1. **Start a language** (skip if `<lang>.po` already exists; needs `gettext`):
+
+   ```bash
+   cd plasmoid/translate
+   msginit --no-translator --locale=de --input=template.pot --output-file=de.po
+   ```
+
+2. **Translate** `de.po` with Lokalize, Poedit or a text editor. Keep placeholders such as `%1` and `%2`; `msgctxt` lines describe where a short string appears. To translate the widget's name and description in the widget explorer, add `"Name[de]"` and `"Description[de]"` next to `Name`/`Description` in the `KPlugin` section of `plasmoid/metadata.json`.
+
+3. **Test** by installing the widget and loading it by id. Loading it from a source directory (`plasmoidviewer -a .`) does not pick up bundled translations on Plasma 6.
+
+   ```bash
+   plasmoid/translate/build.sh
+   kpackagetool6 --type Plasma/Applet --upgrade plasmoid || kpackagetool6 --type Plasma/Applet --install plasmoid
+   LANGUAGE=de LANG=de_DE.UTF-8 plasmoidviewer -a org.kairpods.plasma
+   ```
+
+   Set `LANGUAGE`: Plasma sessions export it and it takes priority over `LANG`. A running plasmashell loads catalogs once, so restart it (`systemctl --user restart plasma-plasmashell`) to see updated translations on the panel.
+
+4. **Submit** a pull request with the `.po` file (and any `metadata.json` additions).
+
+### Adding or changing strings
+
+Wrap every user-visible QML string: `i18n("Text")`, `i18nc("context for translators", "L")` for short or ambiguous strings, `i18np("%1 device", "%1 devices", count)` for counts, and `%1` placeholders instead of string concatenation. Then run `plasmoid/translate/merge.sh` and commit the updated `template.pot` and `.po` files; CI fails when the template is out of date.
 
 ## Code Style
 

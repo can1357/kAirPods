@@ -20,7 +20,7 @@
   sudo pacman -S base-devel pkgconf dbus bluez-libs
   ```
 
-- Plasma SDK (provides `kpackagetool6` for widget installation)
+- gettext (optional, provides `msgfmt` to compile the widget's translations)
 
 ## Building from Source
 
@@ -49,7 +49,8 @@
    install -Dm644 service/systemd/user/kairpodsd.service \
      ~/.config/systemd/user/kairpodsd.service
 
-   # Install the plasmoid
+   # Compile translations (needs msgfmt from gettext), then install the plasmoid
+   plasmoid/translate/build.sh
    kpackagetool6 --type Plasma/Applet --install plasmoid
    ```
 
