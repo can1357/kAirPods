@@ -651,7 +651,8 @@ impl ManagerActor {
       info!("Found connected AirPods: {name} ({addr})");
 
       // Create managed device
-      let airpods = AirPods::new(addr, name, self.battery_study.clone());
+      let product_id = airpods::recognition::product_id(&device).await;
+      let airpods = AirPods::new(addr, name, product_id, self.battery_study.clone());
       let managed = ManagedDevice {
          device: airpods,
          bluetooth_state: BluetoothState::Connected,

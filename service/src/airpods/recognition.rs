@@ -19,21 +19,67 @@ const APPLE_CID: u16 = 0x004C;
 /// Proximity-pairing message type in manufacturer data
 const PP_TYPE: u8 = 0x07;
 
-/// Offset of the product-id byte inside the manufacturer data TLV
-const PID_OFFSET: usize = 6;
+/// Offset of the little-endian product ID in the proximity-pairing TLV.
+const PID_OFFSET: usize = 3;
 
-/// All Apple headphone PIDs known
-/// Based on real device testing and reverse engineering
+/// Known Apple headphone Bluetooth product IDs.
 const AIRPOD_PIDS: &[u32] = &[
-   0x2002, // Beats (also some AirPods variants)
-   0x200E, // AirPods (2nd gen)
-   0x200A, // AirPods (3rd gen)
-   0x200F, // Beats Solo Pro
-   0x2012, // PowerBeats Pro
-   0x2013, // AirPods Max
-   0x2014, // AirPods Pro (2nd gen)
-   0x2024, // AirPods Pro (1st gen)
+   0x2002, // AirPods (1st generation)
+   0x200A, // AirPods Max (Lightning)
+   0x200E, // AirPods Pro (1st generation)
+   0x200F, // AirPods (2nd generation)
+   0x2012, // Beats Fit Pro
+   0x2013, // AirPods (3rd generation)
+   0x2014, // AirPods Pro 2 (Lightning)
+   0x2019, // AirPods 4
+   0x201B, // AirPods 4 (ANC)
+   0x201F, // AirPods Max (USB-C)
+   0x2024, // AirPods Pro 2 (USB-C)
+   0x2027, // AirPods Pro 3
 ];
+
+/// Noise-control capabilities inferred from a Bluetooth product ID.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NoiseCapabilities {
+   pub noise_control: bool,
+   pub adaptive_audio: bool,
+}
+
+impl NoiseCapabilities {
+   /// Unknown products retain all controls.
+   pub fn from_product_id(product_id: Option<u32>) -> Self {
+      match product_id {
+         Some(0x2002 | 0x200F | 0x2013 | 0x2019) => Self {
+            noise_control: false,
+            adaptive_audio: false,
+         },
+         Some(0x200A | 0x200E | 0x2012 | 0x201F) => Self {
+            noise_control: true,
+            adaptive_audio: false,
+         },
+         _ => Self {
+            noise_control: true,
+            adaptive_audio: true,
+         },
+      }
+   }
+}
+
+/// Returns the Apple Bluetooth product ID when available.
+pub async fn product_id(dev: &bluer::Device) -> Option<u32> {
+   if let Ok(Some(modalias)) = dev.modalias().await
+      && modalias.vendor == APPLE_VID
+   {
+      return Some(modalias.product);
+   }
+
+   if let Ok(Some(data)) = dev.manufacturer_data().await
+      && let Some(apple_data) = data.get(&APPLE_CID)
+   {
+      return manufacturer_product_id(apple_data);
+   }
+   None
+}
 
 /// Apple service UUIDs - Note: Not always advertised by AirPods
 static APPLE_SERVICES: [Uuid; 3] = [
@@ -42,14 +88,13 @@ static APPLE_SERVICES: [Uuid; 3] = [
    Uuid::from_u128(0x0000fd32_0000_1000_8000_00805f9b34fb), // Apple service
 ];
 
-/// Check if device is AirPods based on manufacturer data
-fn check_manufacturer_data(data: &[u8]) -> bool {
-   // Apple TLV format: [0] type, [1] len, [2..5] ?, [6] product_id, ...
-   if data.len() > PID_OFFSET && data[0] == PP_TYPE {
-      let product_id = data[PID_OFFSET];
-      return AIRPOD_PIDS.iter().any(|&x| (x & 0xFF) as u8 == product_id);
+/// Extract the product ID from an Apple proximity-pairing message.
+fn manufacturer_product_id(data: &[u8]) -> Option<u32> {
+   if data.len() <= PID_OFFSET + 1 || data[0] != PP_TYPE || data[1] != 0x19 {
+      return None;
    }
-   false
+   let product_id = u32::from(u16::from_le_bytes([data[PID_OFFSET], data[PID_OFFSET + 1]]));
+   AIRPOD_PIDS.contains(&product_id).then_some(product_id)
 }
 
 pub async fn is_device_airpods(dev: &bluer::Device) -> bool {
@@ -69,7 +114,7 @@ pub async fn is_device_airpods(dev: &bluer::Device) -> bool {
    // 2. Check manufacturer data (useful for advertising/unconnected devices)
    if let Ok(Some(mfg_data)) = dev.manufacturer_data().await
       && let Some(apple_data) = mfg_data.get(&APPLE_CID)
-      && check_manufacturer_data(apple_data)
+      && manufacturer_product_id(apple_data).is_some()
    {
       log::debug!("AirPods detected via manufacturer data");
       return true;
@@ -103,4 +148,39 @@ pub async fn is_device_airpods(dev: &bluer::Device) -> bool {
       }
    }
    false
+}
+
+#[cfg(test)]
+mod tests {
+   use super::{NoiseCapabilities, manufacturer_product_id};
+
+   #[test]
+   fn reads_proximity_product_id_not_battery() {
+      let data = [0x07, 0x19, 0x01, 0x0a, 0x20, 0x00, 0x13];
+      assert_eq!(manufacturer_product_id(&data), Some(0x200A));
+      assert_eq!(manufacturer_product_id(&data[..4]), None);
+   }
+
+   #[test]
+   fn capabilities_follow_product_id() {
+      for pid in [0x2002, 0x200F, 0x2013, 0x2019] {
+         let capabilities = NoiseCapabilities::from_product_id(Some(pid));
+         assert!(!capabilities.noise_control && !capabilities.adaptive_audio);
+      }
+      for pid in [0x200A, 0x200E, 0x2012, 0x201F] {
+         let capabilities = NoiseCapabilities::from_product_id(Some(pid));
+         assert!(capabilities.noise_control && !capabilities.adaptive_audio);
+      }
+      for pid in [
+         None,
+         Some(0x2014),
+         Some(0x2024),
+         Some(0x201B),
+         Some(0x2027),
+         Some(0xFFFF),
+      ] {
+         let capabilities = NoiseCapabilities::from_product_id(pid);
+         assert!(capabilities.noise_control && capabilities.adaptive_audio);
+      }
+   }
 }

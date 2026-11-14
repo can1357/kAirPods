@@ -95,6 +95,7 @@ Item {
     // Content
     ColumnLayout {
         anchors.centerIn: parent
+        width: Math.max(0, parent.width - Kirigami.Units.smallSpacing * 2)
         spacing: Kirigami.Units.smallSpacing
         
         // Icon with animation
@@ -123,9 +124,11 @@ Item {
         // Label
         Text {
             text: root.text
-            Layout.alignment: Qt.AlignHCenter
+            Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
             font.pixelSize: Kirigami.Units.gridUnit * 0.65
+            fontSizeMode: Text.HorizontalFit
+            minimumPixelSize: 8
             font.weight: root.checked ? Font.DemiBold : Font.Normal
             color: root.checked ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
             

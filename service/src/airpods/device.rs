@@ -34,6 +34,7 @@ use crate::{
          NoiseControlMode, PKT_HANDSHAKE, PKT_REQUEST_NOTIFY, PKT_SET_FEATURES,
          build_control_packet,
       },
+      recognition::NoiseCapabilities,
    },
    battery_study::{BatteryStudy, BatteryTracker},
    bluetooth::l2cap::{self, L2CapReceiver, L2CapSender, Packet},
@@ -64,6 +65,7 @@ struct AirPodsInner {
    is_connected: AtomicBool,
    ear_detection: AtomicCell<Option<EarDetectionStatus>>,
    noise_mode: AtomicCell<Option<NoiseControlMode>>,
+   product_id: Option<u32>,
    features: FeatureBitmap,
    features_present: FeatureBitmap,
    conn: RwLock<Option<ConnectionState>>,
@@ -134,10 +136,16 @@ impl<T: PartialEq> UpdateOp<T> {
 
 impl AirPods {
    /// Creates a new `AirPods` device instance.
-   pub fn new(address: Address, name: String, battery_study: Option<BatteryStudy>) -> Self {
+   pub fn new(
+      address: Address,
+      name: String,
+      product_id: Option<u32>,
+      battery_study: Option<BatteryStudy>,
+   ) -> Self {
       Self(Arc::new(AirPodsInner {
          address,
          address_str: address.to_smolstr(),
+         product_id,
          name: parking_lot::Mutex::new(name.into()),
          battery_tracker: parking_lot::Mutex::new(BatteryTracker::new(battery_study)),
          ..Default::default()
@@ -214,10 +222,15 @@ impl AirPods {
 
    /// Converts the device state to a JSON representation.
    pub fn to_json(&self) -> serde_json::Value {
+      let capabilities = NoiseCapabilities::from_product_id(self.0.product_id);
       let mut info = json!({
           "address": self.address_str().as_str(),
           "name": self.name().as_str(),
           "connected": self.is_connected(),
+          "capabilities": {
+             "noise_control": capabilities.noise_control,
+             "adaptive_audio": capabilities.adaptive_audio,
+          },
       });
 
       if let Some(battery) = self.battery_info() {

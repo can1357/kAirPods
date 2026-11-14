@@ -7,13 +7,14 @@ Card {
     id: root
 
     property string currentMode: "off"
+    property bool adaptiveSupported: true
     signal modeChanged(mode: string)
 
     title: i18n("Noise Cancellation")
 
     contentItem: Component {
         GridLayout {
-            columns: 2
+            columns: root.adaptiveSupported ? 2 : 3
             rowSpacing: Kirigami.Units.largeSpacing
             columnSpacing: Kirigami.Units.largeSpacing
 
@@ -57,6 +58,7 @@ Card {
                 text: i18n("Adaptive")
                 icon: "view-refresh"
                 mode: "adaptive"
+                visible: root.adaptiveSupported
                 checked: currentMode === "adaptive"
                 onClicked: root.modeChanged("adaptive")
             }
