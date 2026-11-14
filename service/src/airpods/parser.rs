@@ -164,6 +164,26 @@ pub fn parse_battery_status(data: &[u8]) -> Result<BatteryInfo> {
    Ok(battery_info)
 }
 
+#[cfg(test)]
+mod tests {
+   use super::*;
+
+   #[test]
+   fn parses_case_battery_from_three_component_packet() {
+      let packet = [
+         0x04, 0x00, 0x04, 0x00, 0x04, 0x00, 0x03, 0x04, 0x00, 85, 0x01, 0x00, 0x02, 0x00, 78,
+         0x02, 0x00, 0x08, 0x00, 62, 0x01, 0x00,
+      ];
+      let battery = parse_battery_status(&packet).unwrap();
+      assert_eq!(battery.left.level, 85);
+      assert_eq!(battery.right.level, 78);
+      assert_eq!(
+         battery.to_json()["case"],
+         serde_json::json!({"level": 62, "charging": true})
+      );
+   }
+}
+
 pub fn parse_noise_mode(data: &[u8]) -> Result<NoiseControlMode> {
    if data.len() < 8 {
       return Err(

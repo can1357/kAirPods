@@ -123,6 +123,10 @@ First, pair your AirPods through KDE System Settings → Bluetooth
 
 Click the widget to see battery levels and control your AirPods
 
+The case battery appears alongside the earbuds when it is reported. If it is
+missing, put at least one earbud in the case, open the lid, and wait for an
+update. The case level may disappear again when neither earbud is in the case.
+
 ---
 
 ## 🛠️ Troubleshooting
