@@ -64,12 +64,18 @@
             version = "0.1.0";
             src = ./plasmoid;
 
-            dontBuild = true;
+            nativeBuildInputs = [ pkgs.gettext ];
+
+            buildPhase = ''
+              runHook preBuild
+              bash translate/build.sh
+              runHook postBuild
+            '';
 
             installPhase = ''
               runHook preInstall
-              mkdir -p "$out/share/plasma/plasmoids"
-              ln -s "$src" "$out/share/plasma/plasmoids/${pname}"
+              mkdir -p "$out/share/plasma/plasmoids/${pname}"
+              cp -r metadata.json contents "$out/share/plasma/plasmoids/${pname}/"
               runHook postInstall
             '';
 

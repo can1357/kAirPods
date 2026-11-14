@@ -22,7 +22,7 @@ Card {
             NoiseControlButton {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                text: i18n("Off")
+                text: i18nc("Noise control mode", "Off")
                 icon: "audio-volume-muted"
                 mode: "off"
                 checked: currentMode === "off"
@@ -33,7 +33,7 @@ Card {
             NoiseControlButton {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                text: i18n("Active")
+                text: i18nc("Noise control mode: active noise cancellation", "Active")
                 icon: "audio-headphones"
                 mode: "anc"
                 checked: currentMode === "anc"

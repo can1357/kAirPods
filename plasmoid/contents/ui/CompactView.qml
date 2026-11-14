@@ -111,7 +111,7 @@ Item {
                     PlasmaComponents3.Label {
                         id: batteryBadge
                         anchors.centerIn: parent
-                        text: averageBattery + "%"
+                        text: i18nc("Battery level; %1 is a percentage", "%1%", averageBattery)
                         font.pixelSize: Kirigami.Units.gridUnit * 0.5
                         font.bold: true
                         color: "white"

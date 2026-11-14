@@ -18,13 +18,13 @@ Card {
         const mins = minutes % 60
 
         if (hours === 0) {
-            return i18n("~%1m left", mins)
+            return i18nc("Estimated battery time left; %1 is minutes", "~%1m left", mins)
         } else if (hours === 1 && mins === 0) {
-            return i18n("~1h left")
+            return i18nc("Estimated battery time left", "~1h left")
         } else if (mins === 0) {
-            return i18n("~%1h left", hours)
+            return i18nc("Estimated battery time left; %1 is hours", "~%1h left", hours)
         } else {
-            return i18n("~%1h %2m left", hours, mins)
+            return i18nc("Estimated battery time left; %1 is hours, %2 is minutes", "~%1h %2m left", hours, mins)
         }
     }
 
@@ -42,7 +42,7 @@ Card {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignCenter
                     visible: !!device?.battery?.headphone
-                    label: i18n("MX")
+                    label: i18nc("Short label for the AirPods Max battery", "MX")
                     level: device?.battery?.headphone?.level ?? 0
                     charging: !!device?.battery?.headphone?.charging
                     size: Kirigami.Units.gridUnit * 3.5
@@ -55,7 +55,7 @@ Card {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignCenter
                     visible: !!device?.battery?.left && !device?.battery?.headphone
-                    label: i18n("L")
+                    label: i18nc("Short label for the left earbud battery", "L")
                     level: device?.battery?.left?.level ?? 0
                     charging: !!device?.battery?.left?.charging
                     size: Kirigami.Units.gridUnit * 3.5
@@ -68,7 +68,7 @@ Card {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignCenter
                     visible: !!device?.battery?.right && !device?.battery?.headphone
-                    label: i18n("R")
+                    label: i18nc("Short label for the right earbud battery", "R")
                     level: device?.battery?.right?.level ?? 0
                     charging: !!device?.battery?.right?.charging
                     size: Kirigami.Units.gridUnit * 3.5

@@ -233,7 +233,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: size * -0.2
-        text: level + "%"
+        text: i18nc("Battery level; %1 is a percentage", "%1%", level)
         font.pixelSize: size * 0.32
         font.weight: Font.Normal
         opacity: 0.6

@@ -53,6 +53,9 @@ re.sh
 /.env
 node_modules/
 
+# Compiled plasmoid translations (plasmoid/translate/build.sh)
+/plasmoid/contents/locale/
+
 # Nix
 /result
 /flake.lock

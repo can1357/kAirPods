@@ -33,6 +33,7 @@ jobs:
           apt-get install -y --no-install-recommends \
             jq \
             findutils \
+            gettext \
             tar
 
       - name: Validate plasmoid structure
@@ -49,6 +50,7 @@ jobs:
 
       - name: Package plasmoid
         run: |
+          bash plasmoid/translate/build.sh
           mkdir -p "$DESTDIR"
           cp -r plasmoid "$DESTDIR/org.kairpods.plasma"
           cd "$DESTDIR"
@@ -130,3 +132,10 @@ jobs:
           for f in scripts/install.sh scripts/get.sh; do
             [ -x "$f" ] || { echo "$f must be +x"; exit 1; }
           done
+      - name: Check translation template is current
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gettext
+          plasmoid/translate/merge.sh
+          git diff --exit-code -- plasmoid/translate || {
+            echo "Run plasmoid/translate/merge.sh and commit the result"; exit 1; }

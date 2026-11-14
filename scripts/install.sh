@@ -447,6 +447,14 @@ fi
 if [[ "$INSTALL_WIDGET" == "true" ]]; then
     log_step "Installing Plasma widget..."
     cd "$PROJECT_ROOT"
+    if compgen -G "plasmoid/translate/*.po" >/dev/null; then
+        if command -v msgfmt &>/dev/null; then
+            bash plasmoid/translate/build.sh >/dev/null
+            log_info "✓ Translations compiled"
+        else
+            log_warn "msgfmt not found (install gettext); the widget will be English-only"
+        fi
+    fi
     kpackagetool6 --type Plasma/Applet --install plasmoid 2>/dev/null || \
         kpackagetool6 --type Plasma/Applet --upgrade plasmoid
     log_info "✓ Plasma widget installed"
