@@ -55,7 +55,7 @@ Item {
         Kirigami.Icon {
             id: icon
             anchors.centerIn: parent
-            width: Math.min(parent.width, parent.height) * 0.7
+            width: Math.round(Math.min(parent.width, parent.height) * 0.7)
             height: width
             source: "audio-headphones"
 
@@ -124,7 +124,9 @@ Item {
             Rectangle {
                 visible: showPulseAnimation && device && device.connected
                 anchors.centerIn: parent
-                width: parent.width * 1.3
+                // ~1.3x the icon, padded by whole pixels on each side so centerIn
+                // lands on an integer offset and the pulse shares the icon's center.
+                width: parent.width + 2 * Math.round(parent.width * 0.15)
                 height: width
                 radius: width / 2
                 color: "transparent"
