@@ -227,6 +227,12 @@ Item {
                         noiseControlChanged(mode)
                     }
                 }
+
+                // Keeps the battery card at the top when the noise panel is hidden
+                Item {
+                    Layout.fillHeight: true
+                    visible: !noisePanel.visible
+                }
             }
         }
 

@@ -14,7 +14,8 @@ Card {
 
     contentItem: Component {
         GridLayout {
-            columns: root.adaptiveSupported ? 2 : 3
+            columns: 2
+            uniformCellWidths: true
             rowSpacing: Kirigami.Units.largeSpacing
             columnSpacing: Kirigami.Units.largeSpacing
 
@@ -40,10 +41,11 @@ Card {
                 onClicked: root.modeChanged("anc")
             }
 
-            // Transparency button
+            // Transparency button; spans the row Adaptive would share
             NoiseControlButton {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.columnSpan: root.adaptiveSupported ? 1 : 2
                 text: i18n("Transparency")
                 icon: "view-visible"
                 mode: "transparency"
