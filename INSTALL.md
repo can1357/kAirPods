@@ -103,6 +103,40 @@ This will build and install all components automatically.
 - Check Bluetooth is enabled: `bluetoothctl power on`
 - Verify L2CAP support: `lsmod | grep bluetooth`
 
+### Stem presses do not control playback
+
+kAirPods uses MPRIS for its optional ear-detection play/pause feature; it does not handle stem presses in its AirPods protocol parser. Stem playback controls use Bluetooth AVRCP and an MPRIS-compatible player. If they do not work, BlueZ's `mpris-proxy` can expose the player to Bluetooth.
+
+Install the package for your distribution:
+
+- Arch: [`bluez-utils`](https://archlinux.org/packages/extra/x86_64/bluez-utils/files/) (`/usr/bin/mpris-proxy`)
+- Fedora: [`bluez`](https://packages.fedoraproject.org/pkgs/bluez/bluez/fedora-44-updates.html) (`/usr/bin/mpris-proxy`)
+- Debian/Ubuntu: `bluez` (for example, [Debian bookworm](https://packages.debian.org/bookworm/armhf/bluez/filelist) and [Ubuntu jammy](https://packages.ubuntu.com/jammy/amd64/bluez/filelist) install `/usr/lib/bluetooth/mpris-proxy`)
+
+Check your package's file list if the path differs. Create `~/.config/systemd/user/mpris-proxy.service`, using the path for your system in `ExecStart`:
+
+```ini
+[Unit]
+Description=Bluetooth MPRIS proxy
+After=bluetooth.target
+
+[Service]
+ExecStart=/usr/bin/mpris-proxy
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+Then enable it for your user:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now mpris-proxy.service
+```
+
+Some packages already provide this user unit; check `systemctl --user cat mpris-proxy.service` before creating a local override. If it still fails, check `journalctl --user -u mpris-proxy.service` and confirm your player supports MPRIS.
+
 ### Permission issues
 
 - The service needs access to Bluetooth and D-Bus
