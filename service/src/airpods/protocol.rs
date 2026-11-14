@@ -609,4 +609,3 @@ mod tests {
       assert_eq!(info.aggregate_percentage(), None);
    }
 }
-

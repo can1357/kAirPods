@@ -16,6 +16,7 @@ use dbus::AirPodsService;
 use event::{AirPodsEvent, EventBus};
 
 mod airpods;
+mod battery_provider;
 mod battery_study;
 mod bluetooth;
 mod config;
@@ -24,7 +25,6 @@ mod error;
 mod event;
 mod media_control;
 mod ringbuf;
-mod battery_provider;
 
 use battery_provider::BluezBatteryManager;
 
@@ -90,8 +90,10 @@ async fn main() -> Result<()> {
       },
    };
 
+   let export_bluez_battery = config.export_bluez_battery;
+
    // Create Bluetooth manager with event sender and config
-   let bluetooth_manager = BluetoothManager::new(event_bus.clone(), config.clone(), battery_study).await?;
+   let bluetooth_manager = BluetoothManager::new(event_bus.clone(), config, battery_study).await?;
 
    // Create D-Bus service
    let service = AirPodsService::new(bluetooth_manager);
@@ -105,34 +107,21 @@ async fn main() -> Result<()> {
 
    info!("kAirPods D-Bus service started at org.kairpods");
 
-   // Initialize BlueZ system battery provider if enabled in configuration
-   let bluez_battery = if config.export_bluez_battery {
-      match connection::Builder::system() {
-         Ok(builder) => match builder.build().await {
-            Ok(sys_conn) => match BluezBatteryManager::new(sys_conn).await {
-               Ok(mgr) => Some(mgr),
-               Err(e) => {
-                  warn!("Failed to initialize BlueZ battery manager: {e}");
-                  None
-               },
-            },
-            Err(e) => {
-               warn!("Failed to connect to system D-Bus: {e}");
-               None
-            },
-         },
-         Err(e) => {
-            warn!("Failed to create system D-Bus connection builder: {e}");
-            None
-         },
-      }
+   // Export battery levels to BlueZ (and thus UPower) if enabled in configuration
+   let bluez_battery = if export_bluez_battery {
+      BluezBatteryManager::new()
+         .await
+         .inspect_err(|e| warn!("BlueZ battery export unavailable: {e}"))
+         .ok()
    } else {
-      info!("BlueZ battery provider export disabled by configuration");
+      info!("BlueZ battery export disabled by configuration");
       None
    };
 
    // Start event processor
-   event_bus.spawn_dispatcher(connection, bluez_battery).await?;
+   event_bus
+      .spawn_dispatcher(connection, bluez_battery)
+      .await?;
 
    // Wait for shutdown signal
    signal::ctrl_c().await?;
@@ -182,10 +171,10 @@ impl EventProcessor {
       match event {
          AirPodsEvent::DeviceConnected => {
             iface.device_connected(addr_str).await?;
-            if let (Some(mgr), Some(battery)) = (bluez_battery, device.battery_info()) {
-               if let Some(level) = battery.aggregate_percentage() {
-                  let _ = mgr.update_device_battery(addr_str, level).await;
-               }
+            if let Some(mgr) = bluez_battery
+               && let Some(level) = device.battery_info().and_then(|b| b.aggregate_percentage())
+            {
+               mgr.update_device_battery(addr_str, level).await;
             }
             // Emit property changes
             iface
@@ -217,10 +206,10 @@ impl EventProcessor {
                .await?;
          },
          AirPodsEvent::BatteryUpdated(battery) => {
-            if let Some(mgr) = bluez_battery {
-               if let Some(level) = battery.aggregate_percentage() {
-                  let _ = mgr.update_device_battery(addr_str, level).await;
-               }
+            if let Some(mgr) = bluez_battery
+               && let Some(level) = battery.aggregate_percentage()
+            {
+               mgr.update_device_battery(addr_str, level).await;
             }
             iface
                .battery_updated(addr_str, &battery.to_json().to_string())
