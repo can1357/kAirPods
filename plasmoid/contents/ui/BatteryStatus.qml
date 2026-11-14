@@ -81,7 +81,7 @@ Card {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignCenter
                     visible: !!device?.battery?.case && !device?.battery?.headphone
-                    label: i18n("Case")
+                    label: i18nc("Short label for the charging case battery", "Case")
                     level: device?.battery?.case?.level ?? 0
                     charging: !!device?.battery?.case?.charging
                     size: Kirigami.Units.gridUnit * 3.5

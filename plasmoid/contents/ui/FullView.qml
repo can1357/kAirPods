@@ -85,8 +85,8 @@ Item {
                     if (minutes === 0)
                         return i18n("Connected just now")
                     var hours = Math.floor(minutes / 60)
-                    return hours > 0 ? i18n("Connected for %1h %2m", hours, minutes % 60)
-                                     : i18n("Connected for %1m", minutes)
+                    return hours > 0 ? i18nc("Connection duration; %1 is hours, %2 is minutes", "Connected for %1h %2m", hours, minutes % 60)
+                                     : i18nc("Connection duration; %1 is minutes", "Connected for %1m", minutes)
                 }
                 opacity: 0.7
             }
