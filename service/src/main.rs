@@ -24,6 +24,9 @@ mod error;
 mod event;
 mod media_control;
 mod ringbuf;
+mod battery_provider;
+
+use battery_provider::BluezBatteryManager;
 
 use crate::{airpods::device::AirPods, dbus::AirPodsServiceSignals, error::Result};
 
@@ -88,7 +91,7 @@ async fn main() -> Result<()> {
    };
 
    // Create Bluetooth manager with event sender and config
-   let bluetooth_manager = BluetoothManager::new(event_bus.clone(), config, battery_study).await?;
+   let bluetooth_manager = BluetoothManager::new(event_bus.clone(), config.clone(), battery_study).await?;
 
    // Create D-Bus service
    let service = AirPodsService::new(bluetooth_manager);
@@ -102,8 +105,34 @@ async fn main() -> Result<()> {
 
    info!("kAirPods D-Bus service started at org.kairpods");
 
+   // Initialize BlueZ system battery provider if enabled in configuration
+   let bluez_battery = if config.export_bluez_battery {
+      match connection::Builder::system() {
+         Ok(builder) => match builder.build().await {
+            Ok(sys_conn) => match BluezBatteryManager::new(sys_conn).await {
+               Ok(mgr) => Some(mgr),
+               Err(e) => {
+                  warn!("Failed to initialize BlueZ battery manager: {e}");
+                  None
+               },
+            },
+            Err(e) => {
+               warn!("Failed to connect to system D-Bus: {e}");
+               None
+            },
+         },
+         Err(e) => {
+            warn!("Failed to create system D-Bus connection builder: {e}");
+            None
+         },
+      }
+   } else {
+      info!("BlueZ battery provider export disabled by configuration");
+      None
+   };
+
    // Start event processor
-   event_bus.spawn_dispatcher(connection).await?;
+   event_bus.spawn_dispatcher(connection, bluez_battery).await?;
 
    // Wait for shutdown signal
    signal::ctrl_c().await?;
@@ -147,11 +176,17 @@ impl EventProcessor {
       &self,
       iface: &InterfaceRef<AirPodsService>,
       (device, event): (AirPods, AirPodsEvent),
+      bluez_battery: Option<&BluezBatteryManager>,
    ) -> Result<()> {
       let addr_str = device.address_str();
       match event {
          AirPodsEvent::DeviceConnected => {
             iface.device_connected(addr_str).await?;
+            if let (Some(mgr), Some(battery)) = (bluez_battery, device.battery_info()) {
+               if let Some(level) = battery.aggregate_percentage() {
+                  let _ = mgr.update_device_battery(addr_str, level).await;
+               }
+            }
             // Emit property changes
             iface
                .get_mut()
@@ -165,6 +200,9 @@ impl EventProcessor {
                .await?;
          },
          AirPodsEvent::DeviceDisconnected => {
+            if let Some(mgr) = bluez_battery {
+               mgr.remove_device(addr_str).await;
+            }
             iface.device_disconnected(addr_str).await?;
             // Emit property changes
             iface
@@ -179,6 +217,11 @@ impl EventProcessor {
                .await?;
          },
          AirPodsEvent::BatteryUpdated(battery) => {
+            if let Some(mgr) = bluez_battery {
+               if let Some(level) = battery.aggregate_percentage() {
+                  let _ = mgr.update_device_battery(addr_str, level).await;
+               }
+            }
             iface
                .battery_updated(addr_str, &battery.to_json().to_string())
                .await?;
@@ -242,14 +285,18 @@ impl EventProcessor {
       Ok(())
    }
 
-   async fn spawn_dispatcher(self: Arc<Self>, connection: Connection) -> Result<()> {
+   async fn spawn_dispatcher(
+      self: Arc<Self>,
+      connection: Connection,
+      bluez_battery: Option<Arc<BluezBatteryManager>>,
+   ) -> Result<()> {
       let iface = connection
          .object_server()
          .interface::<_, AirPodsService>("/org/kairpods/manager")
          .await?;
       tokio::spawn(async move {
          while let Some(event) = self.recv().await {
-            if let Err(e) = self.dispatch(&iface, event).await {
+            if let Err(e) = self.dispatch(&iface, event, bluez_battery.as_deref()).await {
                warn!("Error dispatching event: {e}");
             }
          }
