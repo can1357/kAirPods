@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 import org.kde.kirigami as Kirigami
+import "depth.js" as Depth
 import org.kde.plasma.components as PlasmaComponents3
 import org.kde.plasma.extras as PlasmaExtras
 
@@ -52,6 +53,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
+        visible: Depth.isDark(Kirigami.Theme.backgroundColor)
         gradient: Gradient {
             GradientStop { position: 0.0; color: Qt.rgba(0.1, 0.1, 0.15, 0.3) }
             GradientStop { position: 1.0; color: Qt.rgba(0.05, 0.05, 0.1, 0.5) }

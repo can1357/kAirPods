@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import org.kde.kirigami as Kirigami
+import "depth.js" as Depth
 
 Item {
     id: root
@@ -27,7 +28,7 @@ Item {
             width: parent.width + 6
             height: parent.height + 6
             radius: width / 2
-            color: Qt.rgba(0, 0, 0, 0.05)
+            color: Depth.shadow(0.05, Kirigami.Theme.backgroundColor)
             z: -3
         }
 
@@ -36,7 +37,7 @@ Item {
             width: parent.width + 3
             height: parent.height + 3
             radius: width / 2
-            color: Qt.rgba(0, 0, 0, 0.08)
+            color: Depth.shadow(0.08, Kirigami.Theme.backgroundColor)
             z: -2
         }
 
@@ -45,7 +46,7 @@ Item {
             width: parent.width + 1
             height: parent.height + 1
             radius: width / 2
-            color: Qt.rgba(0, 0, 0, 0.12)
+            color: Depth.shadow(0.12, Kirigami.Theme.backgroundColor)
             z: -1
         }
 

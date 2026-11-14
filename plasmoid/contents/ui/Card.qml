@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import org.kde.kirigami as Kirigami
+import "depth.js" as Depth
 
 Item {
     id: root
@@ -26,7 +27,7 @@ Item {
         anchors.topMargin: 3
         anchors.leftMargin: 1
         radius: cardRadius
-        color: Qt.rgba(0, 0, 0, 0.08)
+        color: Depth.shadow(0.08, Kirigami.Theme.backgroundColor)
         z: -3
     }
     
@@ -35,7 +36,7 @@ Item {
         anchors.topMargin: 2
         anchors.leftMargin: 0
         radius: cardRadius
-        color: Qt.rgba(0, 0, 0, 0.12)
+        color: Depth.shadow(0.12, Kirigami.Theme.backgroundColor)
         z: -2
     }
     
@@ -43,7 +44,7 @@ Item {
         anchors.fill: parent
         anchors.topMargin: 1
         radius: cardRadius
-        color: Qt.rgba(0, 0, 0, 0.15)
+        color: Depth.shadow(0.15, Kirigami.Theme.backgroundColor)
         z: -1
     }
     
