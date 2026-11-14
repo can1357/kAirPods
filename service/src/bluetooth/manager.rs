@@ -8,7 +8,7 @@ use std::{
    time::Duration,
 };
 
-use bluer::{Adapter, AdapterEvent, Address, Session};
+use bluer::{Adapter, AdapterEvent, AdapterProperty, Address, Session};
 use futures::stream::StreamExt;
 use log::{debug, error, info, warn};
 use smol_str::SmolStr;
@@ -32,8 +32,10 @@ use rand::Rng;
 const HEALTH_CHECK_INTERVAL: Duration = Duration::from_secs(5);
 /// Interval to check for new adapters
 const ADAPTER_CHECK_INTERVAL: Duration = Duration::from_secs(10);
-/// Delay before retrying adapter operations after failure
+/// Delay before the first adapter recovery attempt; doubles per failure
 const ADAPTER_RECOVERY_DELAY: Duration = Duration::from_secs(5);
+/// Maximum delay between adapter recovery attempts
+const MAX_ADAPTER_RECOVERY_DELAY: Duration = Duration::from_secs(120);
 /// Maximum time to wait for AAP connection
 const AAP_CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
 /// Maximum AAP connection retry delay
@@ -57,6 +59,7 @@ struct AdapterInfo {
    state: AdapterState,
    monitor_handle: Option<JoinHandle<()>>,
    retry_count: u32,
+   next_retry: Option<time::Instant>,
    name: SmolStr,
 }
 
@@ -92,7 +95,7 @@ struct ManagedDevice {
 #[derive(Debug)]
 enum ManagerCommand {
    // Adapter events
-   AdapterAvailable(SmolStr, Adapter),
+   AdapterPowered(SmolStr),
    AdapterLost(SmolStr),
    AdapterError(SmolStr, String), // adapter_name, error
 
@@ -259,7 +262,27 @@ impl ManagerActor {
 
       // Main event loop
       loop {
+         let next_retry = self
+            .adapters
+            .values()
+            .filter_map(|info| info.next_retry)
+            .min();
          select! {
+             _ = async {
+                 match next_retry {
+                     Some(deadline) => time::sleep_until(deadline).await,
+                     None => std::future::pending().await,
+                 }
+             } => {
+                 let now = time::Instant::now();
+                 let due: Vec<_> = self.adapters.iter()
+                     .filter(|(_, info)| info.next_retry.is_some_and(|deadline| deadline <= now))
+                     .map(|(name, _)| name.clone())
+                     .collect();
+                 for name in due {
+                     self.initialize_adapter(name).await;
+                 }
+             }
              _ = health_check_interval.tick() => {
                  // Check connection health and scan for new devices
                  self.check_connection_health().await;
@@ -313,53 +336,60 @@ impl ManagerActor {
    }
 
    async fn initialize_adapter(&mut self, name: SmolStr) {
-      match self.session.adapter(&name) {
-         Ok(adapter) => {
-            info!("Initializing adapter: {name}");
+      if !self.adapters.contains_key(&name) {
+         let adapter = match self.session.adapter(&name) {
+            Ok(adapter) => adapter,
+            Err(e) => {
+               warn!("Failed to initialize adapter {name}: {e}");
+               return;
+            },
+         };
+         info!("Initializing adapter: {name}");
+         self.adapters.insert(
+            name.clone(),
+            AdapterInfo {
+               state: AdapterState::Lost,
+               monitor_handle: None,
+               adapter,
+               retry_count: 0,
+               next_retry: None,
+               name: name.clone(),
+            },
+         );
+      }
 
-            // Ensure adapter is powered on
-            if let Ok(powered) = adapter.is_powered().await
-               && !powered
-            {
-               if let Err(e) = adapter.set_powered(true).await {
-                  warn!("Failed to power on adapter {name}: {e}");
-                  // Schedule retry
-                  let loopback = self.loopback_tx.clone();
-                  let name_clone = name.clone();
-                  let adapter_clone = adapter.clone();
-                  tokio::spawn(async move {
-                     time::sleep(ADAPTER_RECOVERY_DELAY).await;
-                     let _ = loopback
-                        .send(ManagerCommand::AdapterAvailable(name_clone, adapter_clone))
-                        .await;
-                  });
-                  return;
-               }
-               info!("Powered on adapter: {name}");
-            }
+      let info = self.adapters.get_mut(&name).expect("adapter inserted");
+      info.next_retry = None;
+      if info.monitor_handle.is_none() {
+         info.monitor_handle = Some(Self::start_adapter_monitor(
+            self.loopback_tx.clone(),
+            name.clone(),
+            info.adapter.clone(),
+         ));
+      }
+      let result = match info.adapter.is_powered().await {
+         Ok(true) => Ok(()),
+         Ok(false) => info.adapter.set_powered(true).await,
+         Err(e) => Err(e),
+      };
+      if let Err(e) = result {
+         self.schedule_adapter_retry(&name, format!("Failed to power on adapter {name}: {e}"));
+         return;
+      }
 
-            // Start monitoring this adapter
-            self.adapters.insert(
-               name.clone(),
-               AdapterInfo {
-                  state: AdapterState::Active,
-                  monitor_handle: Some(Self::start_adapter_monitor(
-                     self.loopback_tx.clone(),
-                     name.clone(),
-                     adapter.clone(),
-                  )),
-                  adapter,
-                  retry_count: 0,
-                  name: name.clone(),
-               },
-            );
+      self.handle_adapter_available(name).await;
+   }
 
-            // Check for already connected devices
-            self.check_connected_devices(&name).await;
-         },
-         Err(e) => {
-            warn!("Failed to initialize adapter {name}: {e}");
-         },
+   fn schedule_adapter_retry(&mut self, name: &SmolStr, error: String) {
+      if let Some(info) = self.adapters.get_mut(name) {
+         if matches!(info.state, AdapterState::Failed(_)) {
+            debug!("{error}");
+         } else {
+            warn!("{error}");
+         }
+         info.state = AdapterState::Failed(error);
+         info.next_retry = Some(time::Instant::now() + adapter_retry_delay(info.retry_count));
+         info.retry_count = info.retry_count.saturating_add(1);
       }
    }
 
@@ -393,6 +423,11 @@ impl ManagerActor {
                AdapterEvent::DeviceRemoved(addr) => {
                   debug!("Device removed on {name}: {addr}");
                   let _ = loopback.send(ManagerCommand::DeviceLost(addr)).await;
+               },
+               AdapterEvent::PropertyChanged(AdapterProperty::Powered(true)) => {
+                  let _ = loopback
+                     .send(ManagerCommand::AdapterPowered(name.clone()))
+                     .await;
                },
                // Note: bluer doesn't provide DeviceConnected/Disconnected events
                // We'll detect connection changes through periodic scanning
@@ -442,8 +477,14 @@ impl ManagerActor {
 
    async fn handle_command(&mut self, cmd: ManagerCommand) -> bool {
       match cmd {
-         ManagerCommand::AdapterAvailable(name, adapter) => {
-            self.handle_adapter_available(name, adapter).await;
+         ManagerCommand::AdapterPowered(name) => {
+            if self
+               .adapters
+               .get(&name)
+               .is_some_and(|info| info.state != AdapterState::Active)
+            {
+               self.initialize_adapter(name).await;
+            }
          },
          ManagerCommand::AdapterLost(name) => {
             self.handle_adapter_lost(name);
@@ -497,13 +538,16 @@ impl ManagerActor {
       true
    }
 
-   async fn handle_adapter_available(&mut self, name: SmolStr, adapter: Adapter) {
-      info!("Adapter available: {name}");
-
+   async fn handle_adapter_available(&mut self, name: SmolStr) {
       if let Some(info) = self.adapters.get_mut(&name) {
-         info.adapter = adapter;
+         if matches!(info.state, AdapterState::Failed(_)) {
+            info!("Adapter recovered: {name}");
+         } else {
+            info!("Adapter available: {name}");
+         }
          info.state = AdapterState::Active;
-         info.retry_count = 0; // Reset retry count on success
+         info.retry_count = 0;
+         info.next_retry = None;
 
          // Restart monitor if needed
          if info.monitor_handle.is_none() {
@@ -532,8 +576,6 @@ impl ManagerActor {
          for addr in devices_to_reconnect {
             let _ = self.establish_aap_connection(addr).await;
          }
-      } else {
-         self.initialize_adapter(name).await;
       }
    }
 
@@ -542,8 +584,6 @@ impl ManagerActor {
 
       if let Some(info) = self.adapters.get_mut(&name) {
          info.state = AdapterState::Lost;
-         info.retry_count += 1;
-
          // Abort the monitor handle
          if let Some(handle) = info.monitor_handle.take() {
             handle.abort();
@@ -563,40 +603,18 @@ impl ManagerActor {
             }
          }
 
-         // Schedule adapter recovery with exponential backoff
-         let loopback = self.loopback_tx.clone();
-         let session = self.session.clone();
-         let retry_count = info.retry_count;
-         let delay = calc_retry_delay(retry_count);
-
-         tokio::spawn(async move {
-            time::sleep(delay).await;
-
-            match session.adapter(&name) {
-               Ok(adapter) => {
-                  let _ = loopback
-                     .send(ManagerCommand::AdapterAvailable(name, adapter))
-                     .await;
-               },
-               Err(e) => {
-                  let _ = loopback
-                     .send(ManagerCommand::AdapterError(
-                        name,
-                        format!("Recovery failed: {e}"),
-                     ))
-                     .await;
-               },
-            }
-         });
+         info.next_retry = Some(time::Instant::now() + adapter_retry_delay(info.retry_count));
+         info.retry_count = info.retry_count.saturating_add(1);
       }
    }
 
    fn handle_adapter_error(&mut self, name: &SmolStr, error: String) {
-      error!("Adapter error on {name}: {error}");
-
-      if let Some(info) = self.adapters.get_mut(name) {
-         info.state = AdapterState::Failed(error);
+      if let Some(info) = self.adapters.get_mut(name)
+         && let Some(handle) = info.monitor_handle.take()
+      {
+         handle.abort();
       }
+      self.schedule_adapter_retry(name, format!("Adapter error on {name}: {error}"));
    }
 
    async fn handle_device_discovered(&mut self, addr: Address, adapter_name: SmolStr) {
@@ -882,12 +900,7 @@ impl ManagerActor {
       match self.session.adapter_names().await {
          Ok(names) => {
             for name in names.into_iter().map(SmolStr::from) {
-               if !self.adapters.contains_key(&name)
-                  || matches!(
-                     self.adapters.get(&name).map(|info| &info.state),
-                     Some(AdapterState::Lost | AdapterState::Failed(_))
-                  )
-               {
+               if !self.adapters.contains_key(&name) {
                   self.initialize_adapter(name).await;
                }
             }
@@ -966,10 +979,31 @@ impl ManagerActor {
    }
 }
 
+fn adapter_retry_delay(retry_count: u32) -> Duration {
+   ADAPTER_RECOVERY_DELAY
+      .saturating_mul(1_u32 << retry_count.min(5))
+      .min(MAX_ADAPTER_RECOVERY_DELAY)
+}
+
 fn calc_retry_delay(retry_count: u32) -> Duration {
    let base_delay = Duration::from_secs(2);
    let exponential = base_delay * (1 << retry_count.min(4));
    let delay = exponential.min(MAX_AAP_RETRY_DELAY);
    let jitter = rand::thread_rng().gen_range(0..1000);
    delay + Duration::from_millis(jitter)
+}
+
+#[cfg(test)]
+mod adapter_retry_tests {
+   use super::*;
+
+   #[test]
+   fn recovery_backoff_grows_and_stays_capped() {
+      let delays: Vec<_> = (0..8).map(adapter_retry_delay).collect();
+      assert_eq!(
+         delays,
+         [5, 10, 20, 40, 80, 120, 120, 120].map(Duration::from_secs)
+      );
+      assert_eq!(adapter_retry_delay(u32::MAX), MAX_ADAPTER_RECOVERY_DELAY);
+   }
 }
