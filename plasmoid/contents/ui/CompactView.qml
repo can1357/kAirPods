@@ -10,24 +10,18 @@ Item {
     property bool showPulseAnimation: true
     signal clicked()
 
-    // Calculate average battery
-    property int averageBattery: {
-        if (!device || !device.battery) return 0
-
-        var count = 0
-        var total = 0
-
-        if (device.battery.left != null) {
-            total += device.battery.left
-            count++
-        }
-        if (device.battery.right != null) {
-            total += device.battery.right
-            count++
-        }
-
-        return count > 0 ? Math.round(total / count) : 0
+    property var batteryLevels: {
+        if (!device || !device.connected || !device.battery) return []
+        const battery = device.battery
+        if (battery.headphone?.level != null) return [battery.headphone.level]
+        const levels = []
+        if (battery.left?.level != null) levels.push(battery.left.level)
+        if (battery.right?.level != null) levels.push(battery.right.level)
+        return levels
     }
+    property int averageBattery: batteryLevels.length
+                                 ? Math.round(batteryLevels.reduce((a, b) => a + b, 0) / batteryLevels.length)
+                                 : 0
 
     MouseArea {
         anchors.fill: parent
@@ -70,7 +64,7 @@ Item {
 
             // Modern battery badge
             Item {
-                visible: device && device.connected && averageBattery > 0
+                visible: batteryLevels.length > 0
                 anchors.bottom: parent.bottom
                 anchors.right: parent.right
                 anchors.margins: -2
