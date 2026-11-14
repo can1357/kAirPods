@@ -190,6 +190,7 @@ Item {
 
         // Device info with fade animation
         Item {
+            id: deviceInfo
             Layout.fillWidth: true
             Layout.fillHeight: true
 
@@ -206,15 +207,20 @@ Item {
 
                 // Battery status
                 BatteryStatus {
+                    id: batteryStatus
                     Layout.fillWidth: true
                     device: currentDevice
                 }
 
                 // Noise control
                 NoiseControlPanel {
+                    id: noisePanel
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    visible: !currentDevice || !currentDevice.capabilities || currentDevice.capabilities.noise_control !== false
+                    visible: (!currentDevice || !currentDevice.capabilities || currentDevice.capabilities.noise_control !== false)
+                             && deviceInfo.width >= implicitWidth
+                             && deviceInfo.height - Kirigami.Units.largeSpacing * 2
+                                >= batteryStatus.implicitHeight + Kirigami.Units.largeSpacing + implicitHeight
                     adaptiveSupported: !currentDevice || !currentDevice.capabilities || currentDevice.capabilities.adaptive_audio !== false
                     currentMode: currentDevice && currentDevice.noise_mode ? currentDevice.noise_mode : "off"
                     onModeChanged: function(mode) {

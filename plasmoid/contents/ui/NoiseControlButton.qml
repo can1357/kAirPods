@@ -11,6 +11,8 @@ Item {
     property string mode: ""
     property bool checked: false
     signal clicked()
+    implicitWidth: buttonContent.implicitWidth
+    implicitHeight: buttonContent.implicitHeight
     
     // Multi-layer shadow for elevation effect
     Rectangle {
@@ -94,6 +96,7 @@ Item {
     
     // Content
     ColumnLayout {
+        id: buttonContent
         anchors.centerIn: parent
         width: Math.max(0, parent.width - Kirigami.Units.smallSpacing * 2)
         spacing: Kirigami.Units.smallSpacing

@@ -9,6 +9,12 @@ Item {
     property alias title: titleLabel.text
     property bool showTitle: true
     property real cardRadius: Kirigami.Units.gridUnit * 0.6
+    implicitWidth: 2 * Kirigami.Units.largeSpacing
+                   + Math.max(titleLabel.visible ? titleLabel.implicitWidth : 0,
+                              contentLoader.item ? contentLoader.item.implicitWidth : 0)
+    implicitHeight: 2 * Kirigami.Units.largeSpacing
+                    + (titleLabel.visible ? titleLabel.implicitHeight + Kirigami.Units.smallSpacing : 0)
+                    + (contentLoader.item ? contentLoader.item.implicitHeight : 0)
     property color backgroundColor: Kirigami.ColorUtils.adjustColor(
         Kirigami.Theme.backgroundColor, 
         {"alpha": -180}

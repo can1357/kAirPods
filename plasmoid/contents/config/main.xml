@@ -9,6 +9,10 @@
             <label>Automatically pause/resume media when AirPods are removed/inserted</label>
             <default>false</default>
         </entry>
+        <entry name="showCompactPercentage" type="Bool">
+            <label>Show battery percentage in the panel</label>
+            <default>false</default>
+        </entry>
         <entry name="showPulseAnimation" type="Bool">
             <label>Show pulse animation when connected</label>
             <default>true</default>

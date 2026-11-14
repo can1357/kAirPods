@@ -180,6 +180,8 @@ PlasmoidItem {
     compactRepresentation: CompactView {
         device: root.currentDevice
         showPulseAnimation: Plasmoid.configuration.showPulseAnimation
+        showPercentage: Plasmoid.configuration.showCompactPercentage
+        horizontalPanel: Plasmoid.formFactor === PlasmaCore.Types.Horizontal
         onClicked: root.expanded = !root.expanded
     }
 
