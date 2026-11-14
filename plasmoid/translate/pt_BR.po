@@ -1,0 +1,185 @@
+# Translation template for the kAirPods Plasma widget.
+# Copyright (C) 2026 Can Boluk
+# This file is distributed under the same license as the plasma_applet_org.kairpods.plasma package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: plasma_applet_org.kairpods.plasma\n"
+"Report-Msgid-Bugs-To: https://github.com/can1357/kAirPods/issues\n"
+"POT-Creation-Date: 2026-11-14 09:18+0100\n"
+"PO-Revision-Date: 2026-11-14 09:18+0100\n"
+"Last-Translator: kAirPods contributors\n"
+"Language-Team: Brazilian Portuguese\n"
+"Language: pt_BR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: contents/config/config.qml
+#, kde-format
+msgid "General"
+msgstr "Geral"
+
+#: contents/ui/BatteryStatus.qml
+#, kde-format
+msgid "Battery"
+msgstr "Bateria"
+
+#: contents/ui/BatteryStatus.qml
+#, kde-format
+msgctxt "Estimated battery time left; %1 is minutes"
+msgid "~%1m left"
+msgstr "Restam ~%1 min"
+
+#: contents/ui/BatteryStatus.qml
+#, kde-format
+msgctxt "Estimated battery time left"
+msgid "~1h left"
+msgstr "Resta ~1 h"
+
+#: contents/ui/BatteryStatus.qml
+#, kde-format
+msgctxt "Estimated battery time left; %1 is hours"
+msgid "~%1h left"
+msgstr "Restam ~%1 h"
+
+#: contents/ui/BatteryStatus.qml
+#, kde-format
+msgctxt "Estimated battery time left; %1 is hours, %2 is minutes"
+msgid "~%1h %2m left"
+msgstr "Restam ~%1 h %2 min"
+
+#: contents/ui/BatteryStatus.qml
+#, kde-format
+msgctxt "Short label for the AirPods Max battery"
+msgid "MX"
+msgstr "MX"
+
+#: contents/ui/BatteryStatus.qml
+#, kde-format
+msgctxt "Short label for the left earbud battery"
+msgid "L"
+msgstr "E"
+
+#: contents/ui/BatteryStatus.qml
+#, kde-format
+msgctxt "Short label for the right earbud battery"
+msgid "R"
+msgstr "D"
+
+#: contents/ui/BatteryStatus.qml
+#, kde-format
+msgctxt "Short label for the charging case battery"
+msgid "Case"
+msgstr "Estojo"
+
+#: contents/ui/CircularBatteryIndicator.qml contents/ui/CompactView.qml
+#, kde-format
+msgctxt "Battery level; %1 is a percentage"
+msgid "%1%"
+msgstr "%1%"
+
+#: contents/ui/ConfigGeneral.qml
+#, kde-format
+msgid "Media Control:"
+msgstr "Controle de mídia:"
+
+#: contents/ui/ConfigGeneral.qml
+#, kde-format
+msgid "Auto pause/resume when AirPods are removed/inserted"
+msgstr "Pausar/retomar automaticamente ao remover/inserir os AirPods"
+
+#: contents/ui/ConfigGeneral.qml
+#, kde-format
+msgid "Panel:"
+msgstr "Painel:"
+
+#: contents/ui/ConfigGeneral.qml
+#, kde-format
+msgid "Show battery percentage in the panel"
+msgstr "Mostrar a porcentagem da bateria no painel"
+
+#: contents/ui/ConfigGeneral.qml
+#, kde-format
+msgid "Appearance:"
+msgstr "Aparência:"
+
+#: contents/ui/ConfigGeneral.qml
+#, kde-format
+msgid "Show pulse animation when connected"
+msgstr "Mostrar animação de pulsação quando conectado"
+
+#: contents/ui/FullView.qml
+#, kde-format
+msgid "Connected just now"
+msgstr "Conectado agora"
+
+#: contents/ui/FullView.qml
+#, kde-format
+msgctxt "Connection duration; %1 is hours, %2 is minutes"
+msgid "Connected for %1h %2m"
+msgstr "Conectado há %1 h %2 min"
+
+#: contents/ui/FullView.qml
+#, kde-format
+msgctxt "Connection duration; %1 is minutes"
+msgid "Connected for %1m"
+msgstr "Conectado há %1 min"
+
+#: contents/ui/FullView.qml
+#, kde-format
+msgid "Device"
+msgstr "Dispositivo"
+
+#: contents/ui/FullView.qml
+#, kde-format
+msgid "No devices"
+msgstr "Nenhum dispositivo"
+
+#: contents/ui/FullView.qml
+#, kde-format
+msgid "No device connected"
+msgstr "Nenhum dispositivo conectado"
+
+#: contents/ui/NoiseControlPanel.qml
+#, kde-format
+msgid "Noise Cancellation"
+msgstr "Cancelamento de ruído"
+
+#: contents/ui/NoiseControlPanel.qml
+#, kde-format
+msgctxt "Noise control mode"
+msgid "Off"
+msgstr "Desligado"
+
+#: contents/ui/NoiseControlPanel.qml
+#, kde-format
+msgctxt "Noise control mode: active noise cancellation"
+msgid "Active"
+msgstr "Ativo"
+
+#: contents/ui/NoiseControlPanel.qml
+#, kde-format
+msgid "Transparency"
+msgstr "Transparência"
+
+#: contents/ui/NoiseControlPanel.qml
+#, kde-format
+msgid "Adaptive"
+msgstr "Adaptativo"
+
+#: contents/ui/main.qml
+#, kde-format
+msgid "kAirPods Service Unavailable"
+msgstr "Serviço kAirPods indisponível"
+
+#: contents/ui/main.qml
+#, kde-format
+msgid "The kAirPods service is not installed or not running"
+msgstr "O serviço kAirPods não está instalado ou não está em execução"
+
+#: contents/ui/main.qml
+#, kde-format
+msgid "Install kAirPods"
+msgstr "Instalar kAirPods"
