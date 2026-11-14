@@ -61,7 +61,7 @@
           # Plasma searches $XDG_DATA_DIRS/share/plasma/plasmoids/<id> for plasmoids
           kairpods-plasmoid = pkgs.stdenvNoCC.mkDerivation rec {
             pname = "org.kairpods.plasma";
-            version = "0.1.0";
+            version = "0.3.0";
             src = ./plasmoid;
 
             nativeBuildInputs = [ pkgs.gettext ];
