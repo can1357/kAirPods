@@ -68,7 +68,6 @@ Item {
             Layout.fillWidth: true
 
             PlasmaExtras.Heading {
-                Layout.fillWidth: true
                 text: "kAirPods"
                 level: 2
                 color: Kirigami.Theme.textColor
@@ -76,6 +75,9 @@ Item {
             }
 
             PlasmaComponents3.Label {
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignRight
+                elide: Text.ElideRight
                 visible: root.currentDevice && root.currentDevice.connected
                          && typeof root.currentDevice.connected_since === "number"
                 text: {

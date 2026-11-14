@@ -121,11 +121,17 @@ Item {
             }
         }
 
-        // Center label
+        // Center label; longer translations (e.g. "Boîtier") shrink to stay inside the ring
         Text {
             anchors.centerIn: parent
+            width: size * 0.82
+            height: size * 0.5
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
             text: label
             font.pixelSize: size * 0.38
+            fontSizeMode: Text.HorizontalFit
+            minimumPixelSize: Math.round(size * 0.18)
             font.weight: Font.Medium
             color: Kirigami.Theme.textColor
             opacity: 0.9
