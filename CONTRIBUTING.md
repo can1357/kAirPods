@@ -32,6 +32,16 @@ cd ../plasmoid
 plasmoidviewer -a .
 ```
 
+## Protocol & reverse engineering
+
+The AirPods protocol implementation lives in [`service/src/airpods/`](service/src/airpods/); see [D-Bus examples](DBUS_EXAMPLES.md) for using the service.
+
+No special hardware is needed to investigate the protocol. On macOS, searching strings in `/usr/sbin/bluetoothd` for AirPods or AAP identifies the Bluetooth daemon's protocol handler. A decompiler such as IDA Pro, Ghidra, or Binary Ninja can then be used to trace a feature's command handler and packet construction (for example, listening mode when toggling ANC).
+
+Alternatively, capture Bluetooth packets with PacketLogger from Xcode's Additional Tools on macOS, or enable the HCI snoop log in Android Developer Options. Compare packets while toggling features to identify commands and values; this approach does not require reverse engineering experience.
+
+See the [maintainer's explanation](https://github.com/can1357/kAirPods/issues/8) for more detail.
+
 ## Code Style
 
 ### Rust
