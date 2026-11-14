@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents3
 import org.kde.plasma.extras as PlasmaExtras
@@ -11,6 +12,26 @@ Item {
     property var devices: ({})
     property string selectedDevice: ""
     property var currentDevice: null
+    property double currentTime: Date.now() / 1000
+
+    function updateCurrentTime() {
+        currentTime = Date.now() / 1000
+    }
+
+    onCurrentDeviceChanged: updateCurrentTime()
+
+    Timer {
+        interval: 60000
+        repeat: true
+        running: root.visible && root.Window.window !== null && root.Window.window.visible
+                 && root.currentDevice && root.currentDevice.connected
+                 && typeof root.currentDevice.connected_since === "number"
+        onRunningChanged: {
+            if (running)
+                root.updateCurrentTime()
+        }
+        onTriggered: root.updateCurrentTime()
+    }
 
     signal deviceSelected(address: string)
     signal noiseControlChanged(mode: string)
@@ -52,6 +73,22 @@ Item {
                 level: 2
                 color: Kirigami.Theme.textColor
                 font.weight: Font.Light
+            }
+
+            PlasmaComponents3.Label {
+                visible: root.currentDevice && root.currentDevice.connected
+                         && typeof root.currentDevice.connected_since === "number"
+                text: {
+                    if (!visible)
+                        return ""
+                    var minutes = Math.max(0, Math.floor((root.currentTime - root.currentDevice.connected_since) / 60))
+                    if (minutes === 0)
+                        return i18n("Connected just now")
+                    var hours = Math.floor(minutes / 60)
+                    return hours > 0 ? i18n("Connected for %1h %2m", hours, minutes % 60)
+                                     : i18n("Connected for %1m", minutes)
+                }
+                opacity: 0.7
             }
         }
 

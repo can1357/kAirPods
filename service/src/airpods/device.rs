@@ -11,7 +11,7 @@ use std::{
       Arc, Weak,
       atomic::{AtomicBool, Ordering},
    },
-   time::Duration,
+   time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use bluer::Address;
@@ -63,6 +63,7 @@ struct AirPodsInner {
    name: parking_lot::Mutex<SmolStr>,
    battery: AtomicCell<Option<BatteryInfo>>,
    is_connected: AtomicBool,
+   connected_since: AtomicCell<Option<u64>>,
    ear_detection: AtomicCell<Option<EarDetectionStatus>>,
    noise_mode: AtomicCell<Option<NoiseControlMode>>,
    product_id: Option<u32>,
@@ -233,6 +234,10 @@ impl AirPods {
           },
       });
 
+      if let Some(connected_since) = self.0.connected_since.load() {
+         info["connected_since"] = json!(connected_since);
+      }
+
       if let Some(battery) = self.battery_info() {
          info["battery"] = battery.to_json();
       }
@@ -297,6 +302,12 @@ impl AirPods {
 
       // Store connection state
       *conn = Some(ConnectionState { sender, jset });
+      self.0.connected_since.store(
+         SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .ok()
+            .map(|duration| duration.as_secs()),
+      );
       self.0.is_connected.store(true, Ordering::Relaxed);
 
       // Initialize battery study session
@@ -315,6 +326,7 @@ impl AirPods {
       self.save_battery_study();
 
       self.0.is_connected.store(false, Ordering::Relaxed);
+      self.0.connected_since.store(None);
       let _ = self.0.conn.write().await.take();
       info!("Disconnected from {}", self.address());
    }
@@ -324,6 +336,7 @@ impl AirPods {
       self.save_battery_study();
 
       self.0.is_connected.store(false, Ordering::Relaxed);
+      self.0.connected_since.store(None);
       let _ = self.0.conn.write().await.take();
       info!("Disconnected from {}", self.address());
       event_tx.emit(self, AirPodsEvent::DeviceDisconnected);
@@ -646,5 +659,23 @@ impl AirPods {
       } else {
          debug!("Device {} not connected, skipping tick", self.address());
       }
+   }
+}
+
+#[cfg(test)]
+mod tests {
+   use super::*;
+
+   #[tokio::test]
+   async fn connected_since_is_serialized_and_cleared_on_disconnect() {
+      let device = AirPods::new(Address::default(), "test".into(), None, None);
+      assert!(device.to_json().get("connected_since").is_none());
+
+      device.0.connected_since.store(Some(123));
+      device.0.is_connected.store(true, Ordering::Relaxed);
+      assert_eq!(device.to_json()["connected_since"], 123);
+
+      device.disconnect().await;
+      assert!(device.to_json().get("connected_since").is_none());
    }
 }
